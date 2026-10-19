@@ -286,7 +286,7 @@ footer strong { color: #ffd166; }
     </div>
     <div class="user-info">
         {% if session.get('user_id') %}
-            Logged in as: <strong>{{ session.get('username') }}</strong> ({{ session.get('role')|capitalize }})<br>
+            Logged in as: <strong>{{ session.get('username') }}</strong> ({{ session.get('role').capitalize() }})<br>
             <a href="/logout">Logout</a>
         {% else %}
             <a href="/login">Login</a> | <a href="/register">Register</a>
@@ -1492,8 +1492,7 @@ def manage_cidb():
     """
   return page(content)
 
-
-# ---------- 6. MANAGE USERS & PASSWORDS (Admin Only) ----------
+# ---------- 7. ADMIN: MANAGE USERS (LIST, ADD, DELETE) ----------
 
 
 @app.route("/manage-users", methods=["GET", "POST"])
@@ -1504,31 +1503,47 @@ def manage_users():
 
   if request.method == "POST":
     action = request.form.get("action")
-    user_id = request.form.get("user_id")
 
     conn = get_db()
     try:
       with conn.cursor() as db:
-        if action == "delete" and user_id:
-          if int(user_id) == session.get("user_id"):
-            flash("You cannot delete your own admin account while logged in.")
+        if action == "add":
+          new_username = request.form.get("new_username", "").strip()
+          new_password = request.form.get("new_password", "")
+          new_role = request.form.get("new_role", "protege")
+
+          if not new_username or not new_password:
+            flash("Username and password are required.")
           else:
-            db.execute("DELETE FROM users WHERE id = %s", (user_id,))
-        elif action == "update_password" and user_id:
-          new_pass = request.form.get("new_password", "")
-          is_valid, message = validate_password(new_pass)
-          if not is_valid:
-            flash(message)
-          else:
-            hashed = generate_password_hash(new_pass)
-            db.execute(
-                "UPDATE users SET password = %s WHERE id = %s", (hashed, user_id)
-            )
-            flash("User password updated successfully.")
-      conn.commit()
+            is_valid, message = validate_password(new_password)
+            if not is_valid:
+              flash(f"Add user failed: {message}")
+            else:
+              db.execute("SELECT id FROM users WHERE username = %s", (new_username,))
+              if db.fetchone():
+                flash("Username already taken. Choose another.")
+              else:
+                hashed_pw = generate_password_hash(new_password)
+                db.execute(
+                    "INSERT INTO users (username, password, role) VALUES (%s, %s, %s)",
+                    (new_username, hashed_pw, new_role),
+                )
+                conn.commit()
+                flash("New user added successfully!")
+
+        elif action == "delete":
+          user_id = request.form.get("user_id")
+          if user_id:
+            if int(user_id) == session.get("user_id"):
+              flash("You cannot delete your own active admin account.")
+            else:
+              db.execute("DELETE FROM users WHERE id = %s", (user_id,))
+              conn.commit()
+              flash("User account deleted successfully.")
     finally:
       conn.close()
-    return redirect(url_for("manage-users"))
+
+    return redirect(url_for("manage_users"))
 
   conn = get_db()
   try:
@@ -1538,53 +1553,164 @@ def manage_users():
   finally:
     conn.close()
 
-  users_table_html = (
-      "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Username</th><th>Role</th><th>Update"
-      " Password</th><th>Action</th></tr></thead><tbody>"
-  )
+  table_rows_html = ""
   for u in users:
-    users_table_html += f"""
+    is_current = (u['id'] == session.get('user_id'))
+    table_rows_html += f"""
         <tr>
             <td>{u['id']}</td>
             <td><strong>{u['username']}</strong></td>
-            <td>{u['role']|capitalize}</td>
+            <td><span class="badge">{u['role'].capitalize()}</span></td>
             <td>
-                <form method="post" style="display:flex; gap:6px;">
-                    <input type="hidden" name="action" value="update_password">
-                    <input type="hidden" name="user_id" value="{u['id']}">
-                    <div class="password-container" style="flex:1;">
-                        <input type="password" id="pass_{u['id']}" name="new_password" placeholder="New Password" required style="margin-top:0; padding:6px;">
-                        <button type="button" class="toggle-eye-btn" onclick="togglePasswordVisibility('pass_{u['id']}', this)">
-                            <svg viewBox="0 0 24 24"><use href="#icon-eye-open"></use></svg>
-                        </button>
-                    </div>
-                    <button type="submit" class="btn btn-sm" style="margin-top:0;">Update</button>
-                </form>
-            </td>
-            <td>
-                <form method="post" onsubmit="return confirm('Delete user {u["username"]}?');">
-                    <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="user_id" value="{u['id']}">
-                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                </form>
+                <a href="/edit-user/{u['id']}" class="btn btn-sm" style="background:#23594b; text-decoration:none; display:inline-block; margin-top:0;">Update</a>
+                {'<form method="post" style="display:inline; margin-left:6px;"><input type="hidden" name="action" value="delete"><input type="hidden" name="user_id" value="' + str(u['id']) + '"><button type="submit" class="btn btn-danger btn-sm" onclick="return confirm(\'Delete this user and their records?\');">Delete</button></form>' if not is_current else '<span class="muted" style="margin-left:8px; font-size:12px;">Active</span>'}
             </td>
         </tr>
-        """
-  users_table_html += "</tbody></table></div>"
+    """
+
+  # Add new person form row at the top
+  add_row_html = f"""
+        <tr style="background: #f8faf9;">
+            <form method="post">
+                <input type="hidden" name="action" value="add">
+                <td>#</td>
+                <td><input type="text" name="new_username" placeholder="New Username" required style="padding:8px; margin:0; width:100%;"></td>
+                <td>
+                    <select name="new_role" required style="padding:8px; margin:0; width:100%;">
+                        <option value="protege">Protege</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </td>
+                <td>
+                    <div style="display:flex; gap:8px;">
+                        <input type="password" name="new_password" placeholder="Password (Min 8, #, @)" required style="padding:8px; margin:0; flex:1;">
+                        <button type="submit" class="btn btn-sm" style="margin:0; background:#23594b; white-space:nowrap;">Save / Add</button>
+                    </div>
+                </td>
+            </form>
+        </tr>
+  """
+
+  user_table_html = f"""
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {add_row_html}
+                {table_rows_html}
+            </tbody>
+        </table>
+    </div>
+  """
 
   content = f"""
-    <h2>Manage Users & Passwords</h2>
+    <h2>User Accounts & Password Management</h2>
+    <p class="muted">Add new users or click update to edit details, role, or reset passwords.</p>
     <section class="panel">
-        <h3>System User Accounts</h3>
-        <p class="muted" style="font-size: 13px; margin-top:-5px; margin-bottom:12px;">Admin can reset user passwords or remove user accounts.</p>
-        {users_table_html}
+        <h3>Registered Users List</h3>
+        {user_table_html}
     </section>
-    """
+  """
   return page(content)
 
 
-# ---------- STATIC FILE SERVING ----------
+# ---------- 8. ADMIN: EDIT SPECIFIC USER (UPDATE ROLE / PASSWORD) ----------
 
+
+@app.route("/edit-user/<int:user_id>", methods=["GET", "POST"])
+def edit_user(user_id):
+  if session.get("role") != "admin":
+    flash("Access denied. Admin only.")
+    return redirect(url_for("dashboard"))
+
+  conn = get_db()
+  try:
+    with conn.cursor() as db:
+      db.execute("SELECT id, username, role FROM users WHERE id = %s", (user_id,))
+      user = db.fetchone()
+  finally:
+    conn.close()
+
+  if not user:
+    flash("User not found.")
+    return redirect(url_for("manage_users"))
+
+  if request.method == "POST":
+    updated_username = request.form.get("username", "").strip()
+    updated_role = request.form.get("role", "")
+    new_password = request.form.get("new_password", "").strip()
+
+    if not updated_username or not updated_role:
+      flash("Username and role are required.")
+    else:
+      conn = get_db()
+      try:
+        with conn.cursor() as db:
+          # Check if username is taken by another account
+          db.execute("SELECT id FROM users WHERE username = %s AND id != %s", (updated_username, user_id))
+          if db.fetchone():
+            flash("Username already taken by another account.")
+          else:
+            if new_password:
+              is_valid, message = validate_password(new_password)
+              if not is_valid:
+                flash(f"Update failed: {message}")
+                return redirect(url_for("edit_user", user_id=user_id))
+              hashed_pw = generate_password_hash(new_password)
+              db.execute(
+                  "UPDATE users SET username = %s, role = %s, password = %s WHERE id = %s",
+                  (updated_username, updated_role, hashed_pw, user_id),
+              )
+            else:
+              db.execute(
+                  "UPDATE users SET username = %s, role = %s WHERE id = %s",
+                  (updated_username, updated_role, user_id),
+              )
+            conn.commit()
+            flash("User updated successfully.")
+            return redirect(url_for("manage_users"))
+      finally:
+        conn.close()
+
+  content = f"""
+    <h2>Edit User: {user['username']}</h2>
+    <section class="panel" style="max-width: 500px; margin: auto;">
+    <form method="post">
+        <label>Username</label>
+        <input name="username" value="{user['username']}" required maxlength="100">
+
+        <label>Role</label>
+        <select name="role" required>
+            <option value="protege" {'SELECTED' if user['role']=='protege' else ''}>Protege</option>
+            <option value="admin" {'SELECTED' if user['role']=='admin' else ''}>Admin</option>
+        </select>
+
+        <label>New Password (Optional)</label>
+        <div class="password-container">
+            <input type="password" id="edit_pass" name="new_password" placeholder="Leave blank to keep current password">
+            <button type="button" class="toggle-eye-btn" onclick="togglePasswordVisibility('edit_pass', this)">
+                <svg viewBox="0 0 24 24"><use href="#icon-eye-open"></use></svg>
+            </button>
+        </div>
+        <p class="muted" style="font-size: 12px; margin-top: 4px;">
+            If changing password, must be at least 8 characters long and include letters, numbers, and a symbol.
+        </p>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button type="submit" class="btn" style="margin:0;">Save Changes</button>
+            <a href="/manage-users" class="btn" style="background: #66756e; text-decoration: none; text-align: center; line-height: normal; padding: 11px 18px; margin:0;">Cancel</a>
+        </div>
+    </form>
+    </section>
+  """
+  return page(content)
 
 @app.route("/uploads/<filename>")
 def uploaded_file(filename):
