@@ -214,6 +214,7 @@ button, .btn {
     border-radius: 6px; cursor: pointer; text-decoration: none; display: inline-block;
 }
 .btn-danger { background: #d90429; }
+.btn-warning { background: #f0ad4e; color: white; }
 .btn-sm { padding: 6px 12px; margin-top: 4px; font-size: 12px; }
 table { width: 100%; border-collapse: collapse; background: white; }
 th, td { padding: 11px; border-bottom: 1px solid #e2e8e5; text-align: left; }
@@ -258,7 +259,7 @@ footer strong { color: #ffd166; }
 .text-moderate { color: #f77f00; }
 .text-strong { color: #2a9d8f; }
 
-/* Modal Styles for Enlarging Data */
+/* Modal Styles for Enlarging Data / Editing */
 .modal-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0, 0, 0, 0.5); display: none; justify-content: center; align-items: center;
@@ -266,7 +267,7 @@ footer strong { color: #ffd166; }
 }
 .modal-content {
     background: white; padding: 25px; border-radius: 12px; max-width: 500px; width: 90%;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3); position: relative;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3); position: relative; max-height: 90vh; overflow-y: auto;
 }
 .modal-close {
     position: absolute; top: 12px; right: 16px; font-size: 22px; cursor: pointer; color: #666;
@@ -325,6 +326,118 @@ footer strong { color: #ffd166; }
         <span class="modal-close" onclick="closeModalDirect()">&times;</span>
         <h3 style="margin-top:0; color:#183b35;" id="modalTitle">Report Details</h3>
         <div id="modalBody"></div>
+    </div>
+</div>
+
+<!-- Edit Safety Report Modal -->
+<div id="editSafetyModal" class="modal-overlay" onclick="closeModalOverlay(event, 'editSafetyModal')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <span class="modal-close" onclick="closeModalDirect('editSafetyModal')">&times;</span>
+        <h3 style="margin-top:0; color:#183b35;">Edit Safety Report</h3>
+        <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="action" value="edit">
+            <input type="hidden" id="edit_safety_id" name="report_id">
+            
+            <label>Report Title</label>
+            <input type="text" id="edit_safety_title" name="title" required maxlength="150">
+            
+            <label>Category</label>
+            <select id="edit_safety_category" name="category" required>
+                <option value="Incident">Incident</option>
+                <option value="Inspection">Safety Inspection</option>
+                <option value="Hazard">Hazard</option>
+            </select>
+            
+            <label>Description</label>
+            <textarea id="edit_safety_description" name="description" rows="3" maxlength="3000"></textarea>
+            
+            <label>Replace File (Optional)</label>
+            <input type="file" name="file" accept=".png, .jpg, .jpeg, .pdf">
+            
+            <button type="submit" class="btn" style="margin-top: 15px;">Save Changes</button>
+            <button type="button" class="btn btn-danger" onclick="closeModalDirect('editSafetyModal')" style="margin-top: 15px;">Cancel</button>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Document Modal -->
+<div id="editDocModal" class="modal-overlay" onclick="closeModalOverlay(event, 'editDocModal')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <span class="modal-close" onclick="closeModalDirect('editDocModal')">&times;</span>
+        <h3 style="margin-top:0; color:#183b35;">Edit Document Record</h3>
+        <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="action" value="edit">
+            <input type="hidden" id="edit_doc_id" name="doc_id">
+            
+            <label>Document Title</label>
+            <input type="text" id="edit_doc_title" name="title" required maxlength="150">
+            
+            <label>Document Type</label>
+            <select id="edit_doc_type" name="doc_type" required>
+                <option value="Policy">Policy</option>
+                <option value="Safety Checklist">Safety Checklist</option>
+                <option value="Audit Report">Audit Report</option>
+                <option value="Certificate">Certificate</option>
+                <option value="Other">Other</option>
+            </select>
+            
+            <label>Next Review Date</label>
+            <input type="date" id="edit_doc_review_date" name="review_date">
+            
+            <label>Replace File (Optional)</label>
+            <input type="file" name="file" accept=".png, .jpg, .jpeg, .pdf">
+            
+            <button type="submit" class="btn" style="margin-top: 15px;">Save Changes</button>
+            <button type="button" class="btn btn-danger" onclick="closeModalDirect('editDocModal')" style="margin-top: 15px;">Cancel</button>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Training Modal -->
+<div id="editTrainingModal" class="modal-overlay" onclick="closeModalOverlay(event, 'editTrainingModal')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <span class="modal-close" onclick="closeModalDirect('editTrainingModal')">&times;</span>
+        <h3 style="margin-top:0; color:#183b35;">Edit Training Record</h3>
+        <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="action" value="edit">
+            <input type="hidden" id="edit_train_id" name="train_id">
+            
+            <label>Employee Name or Staff ID</label>
+            <input type="text" id="edit_train_employee" name="employee" required maxlength="100">
+            
+            <label>Training Course</label>
+            <input type="text" id="edit_train_course" name="course" required maxlength="150">
+            
+            <label>Certificate Expiry Date</label>
+            <input type="date" id="edit_train_expiry_date" name="expiry_date">
+            
+            <label>Replace Certificate / File (Optional)</label>
+            <input type="file" name="file" accept=".png, .jpg, .jpeg, .pdf">
+            
+            <button type="submit" class="btn" style="margin-top: 15px;">Save Changes</button>
+            <button type="button" class="btn btn-danger" onclick="closeModalDirect('editTrainingModal')" style="margin-top: 15px;">Cancel</button>
+        </form>
+    </div>
+</div>
+
+<!-- Edit CIDB Record Modal -->
+<div id="editCidbModal" class="modal-overlay" onclick="closeModalOverlay(event, 'editCidbModal')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <span class="modal-close" onclick="closeModalDirect('editCidbModal')">&times;</span>
+        <h3 style="margin-top:0; color:#183b35;">Edit Protégé CIDB Record</h3>
+        <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="action" value="edit">
+            <input type="hidden" id="edit_cidb_id" name="record_id">
+            
+            <label>Document Title</label>
+            <input type="text" id="edit_cidb_title" name="title" required maxlength="150">
+            
+            <label>Replace File (Optional)</label>
+            <input type="file" name="file" accept=".png, .jpg, .jpeg, .pdf">
+            
+            <button type="submit" class="btn" style="margin-top: 15px;">Save Changes</button>
+            <button type="button" class="btn btn-danger" onclick="closeModalDirect('editCidbModal')" style="margin-top: 15px;">Cancel</button>
+        </form>
     </div>
 </div>
 
@@ -401,9 +514,47 @@ function closeModal(event) {
         document.getElementById('detailModal').style.display = 'none';
     }
 }
-
 function closeModalDirect() {
     document.getElementById('detailModal').style.display = 'none';
+}
+
+function closeModalOverlay(event, modalId) {
+    if (event.target.id === modalId) {
+        document.getElementById(modalId).style.display = 'none';
+    }
+}
+function closeModalDirect(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+function openEditSafetyModal(id, title, category, description) {
+    document.getElementById('edit_safety_id').value = id;
+    document.getElementById('edit_safety_title').value = title;
+    document.getElementById('edit_safety_category').value = category;
+    document.getElementById('edit_safety_description').value = description;
+    document.getElementById('editSafetyModal').style.display = 'flex';
+}
+
+function openEditDocModal(id, title, docType, reviewDate) {
+    document.getElementById('edit_doc_id').value = id;
+    document.getElementById('edit_doc_title').value = title;
+    document.getElementById('edit_doc_type').value = docType;
+    document.getElementById('edit_doc_review_date').value = reviewDate;
+    document.getElementById('editDocModal').style.display = 'flex';
+}
+
+function openEditTrainingModal(id, employee, course, expiryDate) {
+    document.getElementById('edit_train_id').value = id;
+    document.getElementById('edit_train_employee').value = employee;
+    document.getElementById('edit_train_course').value = course;
+    document.getElementById('edit_train_expiry_date').value = expiryDate;
+    document.getElementById('editTrainingModal').style.display = 'flex';
+}
+
+function openEditCidbModal(id, title) {
+    document.getElementById('edit_cidb_id').value = id;
+    document.getElementById('edit_cidb_title').value = title;
+    document.getElementById('editCidbModal').style.display = 'flex';
 }
 </script>
 </body>
@@ -413,26 +564,6 @@ function closeModalDirect() {
 
 def page(content, **data):
   return render_template_string(PAGE, content=content, **data)
-
-
-def table(headers, rows):
-  html = "<div class='table-wrap'><table><thead><tr>"
-  for header in headers:
-    html += f"<th>{header}</th>"
-  html += "</tr></thead><tbody>"
-
-  for row in rows:
-    html += "<tr>"
-    if isinstance(row, dict):
-      values = list(row.values())
-    else:
-      values = row
-
-    for value in values:
-      html += f"<td>{value if value is not None else '-'}</td>"
-    html += "</tr>"
-
-  return html + "</tbody></table></div>"
 
 
 # ---------- AUTHENTICATION & REGISTRATION ROUTES ----------
@@ -657,12 +788,8 @@ def safety():
     return redirect(url_for("dashboard"))
 
   if request.method == "POST":
-    title = request.form.get("title", "").strip()
-    category = request.form.get("category", "")
-    description = request.form.get("description", "").strip()
     action = request.form.get("action")
     report_id = request.form.get("report_id")
-    file = request.files.get("file")
 
     conn = get_db()
     try:
@@ -677,34 +804,72 @@ def safety():
             if f_path.exists():
               os.remove(f_path)
           db.execute("DELETE FROM safety_reports WHERE id = %s", (report_id,))
+
         elif action == "update" and report_id:
           status = request.form.get("status")
           db.execute(
               "UPDATE safety_reports SET status = %s WHERE id = %s",
               (status, report_id),
           )
-        elif title and category in ["Incident", "Inspection", "Hazard"]:
-          filename = None
-          if file and file.filename and allowed_file(file.filename):
-            filename = secure_filename(
-                f"safety_{date.today().isoformat()}_{file.filename}"
-            )
-            file.save(app.config["UPLOAD_FOLDER"] / filename)
 
-          db.execute(
-              """
+        elif action == "edit" and report_id:
+          title = request.form.get("title", "").strip()
+          category = request.form.get("category", "")
+          description = request.form.get("description", "").strip()
+          file = request.files.get("file")
+
+          if title and category in ["Incident", "Inspection", "Hazard"]:
+            if file and file.filename and allowed_file(file.filename):
+              filename = secure_filename(
+                  f"safety_{date.today().isoformat()}_{file.filename}"
+              )
+              file.save(app.config["UPLOAD_FOLDER"] / filename)
+              db.execute(
+                  """
+                                UPDATE safety_reports 
+                                SET title = %s, category = %s, description = %s, filename = %s 
+                                WHERE id = %s
+                            """,
+                  (title, category, description, filename, report_id),
+              )
+            else:
+              db.execute(
+                  """
+                                UPDATE safety_reports 
+                                SET title = %s, category = %s, description = %s 
+                                WHERE id = %s
+                            """,
+                  (title, category, description, report_id),
+              )
+
+        else:
+          title = request.form.get("title", "").strip()
+          category = request.form.get("category", "")
+          description = request.form.get("description", "").strip()
+          file = request.files.get("file")
+
+          if title and category in ["Incident", "Inspection", "Hazard"]:
+            filename = None
+            if file and file.filename and allowed_file(file.filename):
+              filename = secure_filename(
+                  f"safety_{date.today().isoformat()}_{file.filename}"
+              )
+              file.save(app.config["UPLOAD_FOLDER"] / filename)
+
+            db.execute(
+                """
                         INSERT INTO safety_reports
                         (title, category, description, filename, status, created_at)
                         VALUES (%s, %s, %s, %s, 'Open', %s)
                     """,
-              (
-                  title,
-                  category,
-                  description,
-                  filename,
-                  date.today().isoformat(),
-              ),
-          )
+                (
+                    title,
+                    category,
+                    description,
+                    filename,
+                    date.today().isoformat(),
+                ),
+            )
       conn.commit()
     finally:
       conn.close()
@@ -731,6 +896,10 @@ def safety():
         if r["filename"]
         else "-"
     )
+    escaped_title = r["title"].replace("'", "\\'")
+    escaped_category = r["category"].replace("'", "\\'")
+    escaped_desc = (r["description"] or "").replace("'", "\\'").replace("\n", " ")
+
     table_html += f"""
         <tr>
             <td>{r['id']}</td>
@@ -751,6 +920,7 @@ def safety():
             </td>
             <td>{r['created_at']}</td>
             <td>
+                <button type="button" class="btn btn-warning btn-sm" onclick="openEditSafetyModal('{r['id']}', '{escaped_title}', '{escaped_category}', '{escaped_desc}')">Edit</button>
                 <form method="post" onsubmit="return confirm('Delete this report?');" style="display:inline;">
                     <input type="hidden" name="action" value="delete">
                     <input type="hidden" name="report_id" value="{r['id']}">
@@ -813,6 +983,34 @@ def documents():
             if f_path.exists():
               os.remove(f_path)
           db.execute("DELETE FROM documents WHERE id = %s", (doc_id,))
+        elif action == "edit" and doc_id:
+          title = request.form.get("title", "").strip()
+          doc_type = request.form.get("doc_type", "").strip()
+          review_date = request.form.get("review_date", "")
+
+          if title and doc_type:
+            if file and file.filename and allowed_file(file.filename):
+              filename = secure_filename(
+                  f"doc_{date.today().isoformat()}_{file.filename}"
+              )
+              file.save(app.config["UPLOAD_FOLDER"] / filename)
+              db.execute(
+                  """
+                                UPDATE documents 
+                                SET title = %s, doc_type = %s, review_date = %s, filename = %s 
+                                WHERE id = %s
+                            """,
+                  (title, doc_type, review_date or None, filename, doc_id),
+              )
+            else:
+              db.execute(
+                  """
+                                UPDATE documents 
+                                SET title = %s, doc_type = %s, review_date = %s 
+                                WHERE id = %s
+                            """,
+                  (title, doc_type, review_date or None, doc_id),
+              )
         else:
           title = request.form.get("title", "").strip()
           doc_type = request.form.get("doc_type", "").strip()
@@ -851,7 +1049,7 @@ def documents():
 
   table_html = (
       "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Title</th><th>Type</th><th>File</th><th>Review"
-      " Date</th><th>Action</th></tr></thead><tbody>"
+      " Date</th><th>Actions</th></tr></thead><tbody>"
   )
   for r in rows:
     file_link = (
@@ -859,6 +1057,9 @@ def documents():
         if r["filename"]
         else "-"
     )
+    escaped_title = r["title"].replace("'", "\\'")
+    r_date = r["review_date"] or ""
+
     table_html += f"""
         <tr>
             <td>{r['id']}</td>
@@ -867,7 +1068,8 @@ def documents():
             <td>{file_link}</td>
             <td>{r['review_date'] or '-'}</td>
             <td>
-                <form method="post" onsubmit="return confirm('Delete this document?');">
+                <button type="button" class="btn btn-warning btn-sm" onclick="openEditDocModal('{r['id']}', '{escaped_title}', '{r['doc_type']}', '{r_date}')">Edit</button>
+                <form method="post" onsubmit="return confirm('Delete this document?');" style="display:inline;">
                     <input type="hidden" name="action" value="delete">
                     <input type="hidden" name="doc_id" value="{r['id']}">
                     <button type="submit" class="btn btn-danger btn-sm">Delete</button>
@@ -931,15 +1133,43 @@ def training():
             if f_path.exists():
               os.remove(f_path)
           db.execute("DELETE FROM training WHERE id = %s", (train_id,))
+        elif action == "edit" and train_id:
+          employee = request.form.get("employee", "").strip()
+          course = request.form.get("course", "").strip()
+          expiry_date = request.form.get("expiry_date", "")
+
+          if employee and course:
+            if file and file.filename and allowed_file(file.filename):
+              filename = secure_filename(
+                  f"train_{date.today().isoformat()}_{file.filename}"
+              )
+              file.save(app.config["UPLOAD_FOLDER"] / filename)
+              db.execute(
+                  """
+                                UPDATE training 
+                                SET employee = %s, course = %s, expiry_date = %s, filename = %s 
+                                WHERE id = %s
+                            """,
+                  (employee, course, expiry_date or None, filename, train_id),
+              )
+            else:
+              db.execute(
+                  """
+                                UPDATE training 
+                                SET employee = %s, course = %s, expiry_date = %s 
+                                WHERE id = %s
+                            """,
+                  (employee, course, expiry_date or None, train_id),
+              )
         else:
           employee = request.form.get("employee", "").strip()
           course = request.form.get("course", "").strip()
-          expiry = request.form.get("expiry_date", "")
+          expiry_date = request.form.get("expiry_date", "")
           if employee and course:
             filename = None
             if file and file.filename and allowed_file(file.filename):
               filename = secure_filename(
-                  f"training_{date.today().isoformat()}_{file.filename}"
+                  f"train_{date.today().isoformat()}_{file.filename}"
               )
               file.save(app.config["UPLOAD_FOLDER"] / filename)
 
@@ -948,7 +1178,7 @@ def training():
                             INSERT INTO training (employee, course, filename, expiry_date)
                             VALUES (%s, %s, %s, %s)
                         """,
-                (employee, course, filename, expiry or None),
+                (employee, course, filename, expiry_date or None),
             )
       conn.commit()
     finally:
@@ -969,7 +1199,7 @@ def training():
 
   table_html = (
       "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Employee</th><th>Course</th><th>File</th><th>Expiry"
-      " Date</th><th>Action</th></tr></thead><tbody>"
+      " Date</th><th>Actions</th></tr></thead><tbody>"
   )
   for r in rows:
     file_link = (
@@ -977,6 +1207,10 @@ def training():
         if r["filename"]
         else "-"
     )
+    escaped_emp = r["employee"].replace("'", "\\'")
+    escaped_crs = r["course"].replace("'", "\\'")
+    e_date = r["expiry_date"] or ""
+
     table_html += f"""
         <tr>
             <td>{r['id']}</td>
@@ -985,7 +1219,8 @@ def training():
             <td>{file_link}</td>
             <td>{r['expiry_date'] or '-'}</td>
             <td>
-                <form method="post" onsubmit="return confirm('Delete this record?');">
+                <button type="button" class="btn btn-warning btn-sm" onclick="openEditTrainingModal('{r['id']}', '{escaped_emp}', '{escaped_crs}', '{e_date}')">Edit</button>
+                <form method="post" onsubmit="return confirm('Delete this record?');" style="display:inline;">
                     <input type="hidden" name="action" value="delete">
                     <input type="hidden" name="train_id" value="{r['id']}">
                     <button type="submit" class="btn btn-danger btn-sm">Delete</button>
@@ -1018,53 +1253,83 @@ def training():
   return page(content)
 
 
-# ---------- 5. PROTEGE: UPLOAD / REUPLOAD CIDB DOCUMENTS ----------
+# ---------- 5. PROTÉGÉ CIDB RECORDS (Protege / Admin) ----------
 
 
 @app.route("/my-cidb", methods=["GET", "POST"])
 def my_cidb():
-  if session.get("role") != "protege":
-    flash("Access denied. Protege only.")
-    return redirect(url_for("dashboard"))
+  if "user_id" not in session:
+    return redirect(url_for("login"))
 
-  user_id = session.get("user_id")
+  user_id = session["user_id"]
+  role = session["role"]
 
   if request.method == "POST":
     action = request.form.get("action")
+    record_id = request.form.get("record_id")
+    file = request.files.get("file")
 
-    if action == "delete":
-      doc_id = request.form.get("doc_id")
-      conn = get_db()
-      try:
-        with conn.cursor() as db:
-          db.execute(
-              "SELECT filename FROM cidb_uploads WHERE id = %s AND user_id = %s",
-              (doc_id, user_id),
-          )
+    conn = get_db()
+    try:
+      with conn.cursor() as db:
+        if action == "delete" and record_id:
+          if role == "admin":
+            db.execute("SELECT filename FROM cidb_uploads WHERE id = %s", (record_id,))
+          else:
+            db.execute(
+                "SELECT filename FROM cidb_uploads WHERE id = %s AND user_id = %s",
+                (record_id, user_id),
+            )
           row = db.fetchone()
-          if row:
-            file_path = app.config["UPLOAD_FOLDER"] / row["filename"]
-            if file_path.exists():
-              os.remove(file_path)
-            db.execute("DELETE FROM cidb_uploads WHERE id = %s", (doc_id,))
-        conn.commit()
-      finally:
-        conn.close()
-      flash("Document deleted successfully.")
+          if row and row["filename"]:
+            f_path = app.config["UPLOAD_FOLDER"] / row["filename"]
+            if f_path.exists():
+              os.remove(f_path)
 
-    else:
-      title = request.form.get("title", "").strip()
-      file = request.files.get("file")
+          if role == "admin":
+            db.execute("DELETE FROM cidb_uploads WHERE id = %s", (record_id,))
+          else:
+            db.execute(
+                "DELETE FROM cidb_uploads WHERE id = %s AND user_id = %s",
+                (record_id, user_id),
+            )
+        elif action == "edit" and record_id:
+          title = request.form.get("title", "").strip()
+          if title:
+            if file and file.filename and allowed_file(file.filename):
+              filename = secure_filename(
+                  f"cidb_{session['username']}_{date.today().isoformat()}_{file.filename}"
+              )
+              file.save(app.config["UPLOAD_FOLDER"] / filename)
+              if role == "admin":
+                db.execute(
+                    "UPDATE cidb_uploads SET title = %s, filename = %s WHERE id = %s",
+                    (title, filename, record_id),
+                )
+              else:
+                db.execute(
+                    "UPDATE cidb_uploads SET title = %s, filename = %s WHERE id = %s AND user_id = %s",
+                    (title, filename, record_id, user_id),
+                )
+            else:
+              if role == "admin":
+                db.execute(
+                    "UPDATE cidb_uploads SET title = %s WHERE id = %s",
+                    (title, record_id),
+                )
+              else:
+                db.execute(
+                    "UPDATE cidb_uploads SET title = %s WHERE id = %s AND user_id = %s",
+                    (title, record_id, user_id),
+                )
+        else:
+          title = request.form.get("title", "").strip()
+          if title and file and file.filename and allowed_file(file.filename):
+            filename = secure_filename(
+                f"cidb_{session['username']}_{date.today().isoformat()}_{file.filename}"
+            )
+            file.save(app.config["UPLOAD_FOLDER"] / filename)
 
-      if title and file and allowed_file(file.filename):
-        filename = secure_filename(
-            f"user_{user_id}_{date.today().isoformat()}_{file.filename}"
-        )
-        file.save(app.config["UPLOAD_FOLDER"] / filename)
-
-        conn = get_db()
-        try:
-          with conn.cursor() as db:
             db.execute(
                 """
                             INSERT INTO cidb_uploads (user_id, title, filename, uploaded_at)
@@ -1072,22 +1337,20 @@ def my_cidb():
                         """,
                 (user_id, title, filename, date.today().isoformat()),
             )
-          conn.commit()
-        finally:
-          conn.close()
-        flash("Document uploaded successfully!")
-      else:
-        flash(
-            "Invalid file or missing title. Allowed formats: PNG, JPG, JPEG, PDF."
-        )
+      conn.commit()
+    finally:
+      conn.close()
 
-    return redirect(url_for("my_cidb"))
+    return redirect(url_for("my_cidb" if role != "admin" else "manage_cidb"))
 
   conn = get_db()
   try:
     with conn.cursor() as db:
       db.execute(
-          "SELECT id, title, filename, uploaded_at FROM cidb_uploads WHERE user_id = %s ORDER BY id DESC",
+          """
+                SELECT id, title, filename, uploaded_at 
+                FROM cidb_uploads WHERE user_id = %s ORDER BY id DESC
+            """,
           (user_id,),
       )
       rows = db.fetchall()
@@ -1095,20 +1358,23 @@ def my_cidb():
     conn.close()
 
   table_html = (
-      "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Title</th><th>File</th><th>Uploaded Date</th><th>Actions</th></tr></thead><tbody>"
+      "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Title</th><th>File</th><th>Uploaded"
+      " Date</th><th>Actions</th></tr></thead><tbody>"
   )
   for r in rows:
+    file_link = f'<a href="/uploads/{r["filename"]}" target="_blank">View File</a>'
+    escaped_title = r["title"].replace("'", "\\'")
     table_html += f"""
         <tr>
             <td>{r['id']}</td>
             <td>{r['title']}</td>
-            <td><a href="/uploads/{r['filename']}" target="_blank">View File</a></td>
+            <td>{file_link}</td>
             <td>{r['uploaded_at']}</td>
             <td>
-                <a href="/reupload-cidb/{r['id']}" class="btn btn-sm" style="background:#23594b; text-decoration:none; display:inline-block; margin-top:0;">Re-upload</a>
-                <form method="post" onsubmit="return confirm('Delete this document?');" style="display:inline; margin-left:6px;">
+                <button type="button" class="btn btn-warning btn-sm" onclick="openEditCidbModal('{r['id']}', '{escaped_title}')">Edit</button>
+                <form method="post" onsubmit="return confirm('Delete this record?');" style="display:inline;">
                     <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="doc_id" value="{r['id']}">
+                    <input type="hidden" name="record_id" value="{r['id']}">
                     <button type="submit" class="btn btn-danger btn-sm">Delete</button>
                 </form>
             </td>
@@ -1117,111 +1383,22 @@ def my_cidb():
   table_html += "</tbody></table></div>"
 
   content = f"""
-    <h2>My CIDB Card & Document Records</h2>
+    <h2>My CIDB & Protégé Documents</h2>
     <section class="panel">
-    <h3>Upload / Re-upload Document (Picture or PDF)</h3>
+    <h3>Upload New Document / CIDB Card</h3>
     <form method="post" enctype="multipart/form-data">
-        <label>Document Title (e.g., CIDB Card 2026)</label>
-        <input name="title" required maxlength="150">
-        <label>Select File (Image or PDF)</label>
+        <label>Document Title</label>
+        <input name="title" required maxlength="150" placeholder="e.g., Green Card CIDB, CV, Certificate">
+        <label>Attach File (PDF, JPG, PNG)</label>
         <input type="file" name="file" accept=".png, .jpg, .jpeg, .pdf" required>
         <button type="submit">Upload Document</button>
     </form>
-    <p class="muted" style="margin-top: 10px; font-size: 13px;">If you uploaded a wrong document, click the "Re-upload" button in the table below to replace it.</p>
     </section>
-    <section class="panel"><h3>My Uploaded Files</h3>
+    <section class="panel"><h3>My Uploaded Records</h3>
     {table_html}
     </section>
     """
   return page(content)
-
-
-# ---------- 5b. PROTEGE: RE-UPLOAD SPECIFIC CIDB DOCUMENT ----------
-
-
-@app.route("/reupload-cidb/<int:doc_id>", methods=["GET", "POST"])
-def reupload_cidb(doc_id):
-  if session.get("role") != "protege":
-    flash("Access denied. Protege only.")
-    return redirect(url_for("dashboard"))
-
-  user_id = session.get("user_id")
-
-  conn = get_db()
-  try:
-    with conn.cursor() as db:
-      db.execute(
-          "SELECT id, title, filename FROM cidb_uploads WHERE id = %s AND user_id = %s",
-          (doc_id, user_id),
-      )
-      doc = db.fetchone()
-  finally:
-    conn.close()
-
-  if not doc:
-    flash("Document record not found.")
-    return redirect(url_for("my_cidb"))
-
-  if request.method == "POST":
-    title = request.form.get("title", "").strip()
-    file = request.files.get("file")
-
-    if not title:
-      flash("Document title is required.")
-    else:
-      conn = get_db()
-      try:
-        with conn.cursor() as db:
-          if file and file.filename and allowed_file(file.filename):
-            old_file_path = app.config["UPLOAD_FOLDER"] / doc["filename"]
-            if old_file_path.exists():
-              os.remove(old_file_path)
-
-            new_filename = secure_filename(
-                f"user_{user_id}_{date.today().isoformat()}_{file.filename}"
-            )
-            file.save(app.config["UPLOAD_FOLDER"] / new_filename)
-
-            db.execute(
-                "UPDATE cidb_uploads SET title = %s, filename = %s, uploaded_at = %s WHERE id = %s",
-                (title, new_filename, date.today().isoformat(), doc_id),
-            )
-          else:
-            db.execute(
-                "UPDATE cidb_uploads SET title = %s WHERE id = %s",
-                (title, doc_id),
-            )
-
-          conn.commit()
-          flash("Document re-uploaded / updated successfully!")
-          return redirect(url_for("my_cidb"))
-      finally:
-        conn.close()
-
-  content = f"""
-    <h2>Re-upload Document</h2>
-    <section class="panel" style="max-width: 500px; margin: auto;">
-    <form method="post" enctype="multipart/form-data">
-        <label>Document Title</label>
-        <input name="title" value="{doc['title']}" required maxlength="150">
-
-        <label>Current File</label>
-        <p style="margin-top: 4px;"><a href="/uploads/{doc['filename']}" target="_blank">View Current File ({doc['filename']})</a></p>
-
-        <label>Select New File (Optional - Leave blank to keep current file)</label>
-        <input type="file" name="file" accept=".png, .jpg, .jpeg, .pdf">
-
-        <div style="display: flex; gap: 10px; margin-top: 20px;">
-            <button type="submit" class="btn" style="margin:0;">Update / Re-upload</button>
-            <a href="/my-cidb" class="btn" style="background: #66756e; text-decoration: none; text-align: center; line-height: normal; padding: 11px 18px; margin:0;">Cancel</a>
-        </div>
-    </form>
-    </section>
-  """
-  return page(content)
-
-
-# ---------- 6. ADMIN: MONITOR & DELETE ALL PROTEGE UPLOADS ----------
 
 
 @app.route("/manage-cidb", methods=["GET", "POST"])
@@ -1232,33 +1409,48 @@ def manage_cidb():
 
   if request.method == "POST":
     action = request.form.get("action")
-    doc_id = request.form.get("doc_id")
+    record_id = request.form.get("record_id")
 
-    if action == "delete" and doc_id:
-      conn = get_db()
-      try:
-        with conn.cursor() as db:
-          db.execute("SELECT filename FROM cidb_uploads WHERE id = %s", (doc_id,))
+    conn = get_db()
+    try:
+      with conn.cursor() as db:
+        if action == "delete" and record_id:
+          db.execute("SELECT filename FROM cidb_uploads WHERE id = %s", (record_id,))
           row = db.fetchone()
-          if row:
-            file_path = app.config["UPLOAD_FOLDER"] / row["filename"]
-            if file_path.exists():
-              os.remove(file_path)
-            db.execute("DELETE FROM cidb_uploads WHERE id = %s", (doc_id,))
-            conn.commit()
-            flash("Protege document deleted successfully.")
-      finally:
-        conn.close()
-
+          if row and row["filename"]:
+            f_path = app.config["UPLOAD_FOLDER"] / row["filename"]
+            if f_path.exists():
+              os.remove(f_path)
+          db.execute("DELETE FROM cidb_uploads WHERE id = %s", (record_id,))
+        elif action == "edit" and record_id:
+          title = request.form.get("title", "").strip()
+          file = request.files.get("file")
+          if title:
+            if file and file.filename and allowed_file(file.filename):
+              filename = secure_filename(
+                  f"cidb_admin_{date.today().isoformat()}_{file.filename}"
+              )
+              file.save(app.config["UPLOAD_FOLDER"] / filename)
+              db.execute(
+                  "UPDATE cidb_uploads SET title = %s, filename = %s WHERE id = %s",
+                  (title, filename, record_id),
+              )
+            else:
+              db.execute(
+                  "UPDATE cidb_uploads SET title = %s WHERE id = %s",
+                  (title, record_id),
+              )
+      conn.commit()
+    finally:
+      conn.close()
     return redirect(url_for("manage_cidb"))
 
   conn = get_db()
   try:
     with conn.cursor() as db:
       db.execute("""
-                SELECT c.id, u.username, c.title, c.filename, c.uploaded_at
-                FROM cidb_uploads c
-                JOIN users u ON c.user_id = u.id
+                SELECT c.id, u.username, c.title, c.filename, c.uploaded_at 
+                FROM cidb_uploads c JOIN users u ON c.user_id = u.id 
                 ORDER BY c.id DESC
             """)
       rows = db.fetchall()
@@ -1266,20 +1458,25 @@ def manage_cidb():
     conn.close()
 
   table_html = (
-      "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Protege Username</th><th>Title</th><th>File</th><th>Uploaded Date</th><th>Actions</th></tr></thead><tbody>"
+      "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Protégé"
+      " Username</th><th>Title</th><th>File</th><th>Uploaded"
+      " Date</th><th>Actions</th></tr></thead><tbody>"
   )
   for r in rows:
+    file_link = f'<a href="/uploads/{r["filename"]}" target="_blank">View File</a>'
+    escaped_title = r["title"].replace("'", "\\'")
     table_html += f"""
         <tr>
             <td>{r['id']}</td>
             <td><strong>{r['username']}</strong></td>
             <td>{r['title']}</td>
-            <td><a href="/uploads/{r['filename']}" target="_blank">View File</a></td>
+            <td>{file_link}</td>
             <td>{r['uploaded_at']}</td>
             <td>
-                <form method="post" onsubmit="return confirm('Delete this protege document?');" style="display:inline;">
+                <button type="button" class="btn btn-warning btn-sm" onclick="openEditCidbModal('{r['id']}', '{escaped_title}')">Edit</button>
+                <form method="post" onsubmit="return confirm('Delete this record?');" style="display:inline;">
                     <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="doc_id" value="{r['id']}">
+                    <input type="hidden" name="record_id" value="{r['id']}">
                     <button type="submit" class="btn btn-danger btn-sm">Delete</button>
                 </form>
             </td>
@@ -1288,15 +1485,15 @@ def manage_cidb():
   table_html += "</tbody></table></div>"
 
   content = f"""
-    <h2>Protege CIDB Card & Document Monitor</h2>
-    <section class="panel"><h3>All Protege Uploads</h3>
+    <h2>All Protégé CIDB Records & Documents</h2>
+    <section class="panel"><h3>Monitor All Uploads</h3>
     {table_html}
     </section>
     """
   return page(content)
 
 
-# ---------- 7. ADMIN: MANAGE USERS (LIST, ADD, DELETE) ----------
+# ---------- 6. MANAGE USERS & PASSWORDS (Admin Only) ----------
 
 
 @app.route("/manage-users", methods=["GET", "POST"])
@@ -1307,47 +1504,31 @@ def manage_users():
 
   if request.method == "POST":
     action = request.form.get("action")
+    user_id = request.form.get("user_id")
 
     conn = get_db()
     try:
       with conn.cursor() as db:
-        if action == "add":
-          new_username = request.form.get("new_username", "").strip()
-          new_password = request.form.get("new_password", "")
-          new_role = request.form.get("new_role", "protege")
-
-          if not new_username or not new_password:
-            flash("Username and password are required.")
+        if action == "delete" and user_id:
+          if int(user_id) == session.get("user_id"):
+            flash("You cannot delete your own admin account while logged in.")
           else:
-            is_valid, message = validate_password(new_password)
-            if not is_valid:
-              flash(f"Add user failed: {message}")
-            else:
-              db.execute("SELECT id FROM users WHERE username = %s", (new_username,))
-              if db.fetchone():
-                flash("Username already taken. Choose another.")
-              else:
-                hashed_pw = generate_password_hash(new_password)
-                db.execute(
-                    "INSERT INTO users (username, password, role) VALUES (%s, %s, %s)",
-                    (new_username, hashed_pw, new_role),
-                )
-                conn.commit()
-                flash("New user added successfully!")
-
-        elif action == "delete":
-          user_id = request.form.get("user_id")
-          if user_id:
-            if int(user_id) == session.get("user_id"):
-              flash("You cannot delete your own active admin account.")
-            else:
-              db.execute("DELETE FROM users WHERE id = %s", (user_id,))
-              conn.commit()
-              flash("User account deleted successfully.")
+            db.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        elif action == "update_password" and user_id:
+          new_pass = request.form.get("new_password", "")
+          is_valid, message = validate_password(new_pass)
+          if not is_valid:
+            flash(message)
+          else:
+            hashed = generate_password_hash(new_pass)
+            db.execute(
+                "UPDATE users SET password = %s WHERE id = %s", (hashed, user_id)
+            )
+            flash("User password updated successfully.")
+      conn.commit()
     finally:
       conn.close()
-
-    return redirect(url_for("manage_users"))
+    return redirect(url_for("manage-users"))
 
   conn = get_db()
   try:
@@ -1357,165 +1538,52 @@ def manage_users():
   finally:
     conn.close()
 
-  table_rows_html = ""
+  users_table_html = (
+      "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Username</th><th>Role</th><th>Update"
+      " Password</th><th>Action</th></tr></thead><tbody>"
+  )
   for u in users:
-    is_current = (u['id'] == session.get('user_id'))
-    table_rows_html += f"""
+    users_table_html += f"""
         <tr>
             <td>{u['id']}</td>
             <td><strong>{u['username']}</strong></td>
-            <td><span class="badge">{u['role'].capitalize()}</span></td>
+            <td>{u['role']|capitalize}</td>
             <td>
-                <a href="/edit-user/{u['id']}" class="btn btn-sm" style="background:#23594b; text-decoration:none; display:inline-block; margin-top:0;">Update</a>
-                {'<form method="post" style="display:inline; margin-left:6px;"><input type="hidden" name="action" value="delete"><input type="hidden" name="user_id" value="' + str(u['id']) + '"><button type="submit" class="btn btn-danger btn-sm" onclick="return confirm(\'Delete this user and their records?\');">Delete</button></form>' if not is_current else '<span class="muted" style="margin-left:8px; font-size:12px;">Active</span>'}
+                <form method="post" style="display:flex; gap:6px;">
+                    <input type="hidden" name="action" value="update_password">
+                    <input type="hidden" name="user_id" value="{u['id']}">
+                    <div class="password-container" style="flex:1;">
+                        <input type="password" id="pass_{u['id']}" name="new_password" placeholder="New Password" required style="margin-top:0; padding:6px;">
+                        <button type="button" class="toggle-eye-btn" onclick="togglePasswordVisibility('pass_{u['id']}', this)">
+                            <svg viewBox="0 0 24 24"><use href="#icon-eye-open"></use></svg>
+                        </button>
+                    </div>
+                    <button type="submit" class="btn btn-sm" style="margin-top:0;">Update</button>
+                </form>
+            </td>
+            <td>
+                <form method="post" onsubmit="return confirm('Delete user {u["username"]}?');">
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="user_id" value="{u['id']}">
+                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                </form>
             </td>
         </tr>
-    """
-
-  add_row_html = f"""
-        <tr style="background: #f8faf9;">
-            <form method="post">
-                <input type="hidden" name="action" value="add">
-                <td>#</td>
-                <td><input type="text" name="new_username" placeholder="New Username" required style="padding:8px; margin:0; width:100%;"></td>
-                <td>
-                    <select name="new_role" required style="padding:8px; margin:0; width:100%;">
-                        <option value="protege">Protege</option>
-                        <option value="admin">Admin</option>
-                    </select>
-                </td>
-                <td>
-                    <div style="display:flex; gap:8px;">
-                        <input type="password" name="new_password" placeholder="Password (Min 8, #, @)" required style="padding:8px; margin:0; flex:1;">
-                        <button type="submit" class="btn btn-sm" style="margin:0; background:#23594b; white-space:nowrap;">Save / Add</button>
-                    </div>
-                </td>
-            </form>
-        </tr>
-  """
-
-  user_table_html = f"""
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Username</th>
-                    <th>Role</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {add_row_html}
-                {table_rows_html}
-            </tbody>
-        </table>
-    </div>
-  """
+        """
+  users_table_html += "</tbody></table></div>"
 
   content = f"""
-    <h2>User Accounts & Password Management</h2>
-    <p class="muted">Add new users or click update to edit details, role, or reset passwords.</p>
+    <h2>Manage Users & Passwords</h2>
     <section class="panel">
-        <h3>Registered Users List</h3>
-        {user_table_html}
+        <h3>System User Accounts</h3>
+        <p class="muted" style="font-size: 13px; margin-top:-5px; margin-bottom:12px;">Admin can reset user passwords or remove user accounts.</p>
+        {users_table_html}
     </section>
-  """
+    """
   return page(content)
 
 
-# ---------- 8. ADMIN: EDIT SPECIFIC USER (UPDATE ROLE / PASSWORD) ----------
-
-
-@app.route("/edit-user/<int:user_id>", methods=["GET", "POST"])
-def edit_user(user_id):
-  if session.get("role") != "admin":
-    flash("Access denied. Admin only.")
-    return redirect(url_for("dashboard"))
-
-  conn = get_db()
-  try:
-    with conn.cursor() as db:
-      db.execute("SELECT id, username, role FROM users WHERE id = %s", (user_id,))
-      user = db.fetchone()
-  finally:
-    conn.close()
-
-  if not user:
-    flash("User not found.")
-    return redirect(url_for("manage_users"))
-
-  if request.method == "POST":
-    updated_username = request.form.get("username", "").strip()
-    updated_role = request.form.get("role", "")
-    new_password = request.form.get("new_password", "").strip()
-
-    if not updated_username or not updated_role:
-      flash("Username and role are required.")
-    else:
-      conn = get_db()
-      try:
-        with conn.cursor() as db:
-          db.execute("SELECT id FROM users WHERE username = %s AND id != %s", (updated_username, user_id))
-          if db.fetchone():
-            flash("Username already taken by another account.")
-          else:
-            if new_password:
-              is_valid, message = validate_password(new_password)
-              if not is_valid:
-                flash(f"Update failed: {message}")
-                return redirect(url_for("edit_user", user_id=user_id))
-              hashed_pw = generate_password_hash(new_password)
-              db.execute(
-                  "UPDATE users SET username = %s, role = %s, password = %s WHERE id = %s",
-                  (updated_username, updated_role, hashed_pw, user_id),
-              )
-            else:
-              db.execute(
-                  "UPDATE users SET username = %s, role = %s WHERE id = %s",
-                  (updated_username, updated_role, user_id),
-              )
-            conn.commit()
-            flash("User updated successfully.")
-            return redirect(url_for("manage_users"))
-      finally:
-        conn.close()
-
-  content = f"""
-    <h2>Edit User: {user['username']}</h2>
-    <section class="panel" style="max-width: 500px; margin: auto;">
-    <form method="post">
-        <label>Username</label>
-        <input name="username" value="{user['username']}" required maxlength="100">
-
-        <label>Role</label>
-        <select name="role" required>
-            <option value="protege" {'SELECTED' if user['role']=='protege' else ''}>Protege</option>
-            <option value="admin" {'SELECTED' if user['role']=='admin' else ''}>Admin</option>
-        </select>
-
-        <label>New Password (Optional)</label>
-        <div class="password-container">
-            <input type="password" id="edit_pass" name="new_password" placeholder="Leave blank to keep current password">
-            <button type="button" class="toggle-eye-btn" onclick="togglePasswordVisibility('edit_pass', this)">
-                <svg viewBox="0 0 24 24"><use href="#icon-eye-open"></use></svg>
-            </button>
-        </div>
-        <p class="muted" style="font-size: 12px; margin-top: 4px;">
-            If changing password, must be at least 8 characters long and include letters, numbers, and a symbol.
-        </p>
-
-        <div style="display: flex; gap: 10px; margin-top: 20px;">
-            <button type="submit" class="btn" style="margin:0;">Save Changes</button>
-            <a href="/manage-users" class="btn" style="background: #66756e; text-decoration: none; text-align: center; line-height: normal; padding: 11px 18px; margin:0;">Cancel</a>
-        </div>
-    </form>
-    </section>
-  """
-  return page(content)
-
-
-# ---------- FILE SERVING ROUTE ----------
+# ---------- STATIC FILE SERVING ----------
 
 
 @app.route("/uploads/<filename>")
@@ -1523,8 +1591,6 @@ def uploaded_file(filename):
   return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
 
-# ---------- START APPLICATION ----------
-
 if __name__ == "__main__":
   init_db()
-  app.run(debug=True)
+  app.run(debug=True, port=5000)
