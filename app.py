@@ -393,6 +393,7 @@ main { max-width: 1100px; margin: 28px auto; padding: 0 18px; flex: 1; }
     border-radius: 12px; margin-bottom: 18px;
     box-shadow: 0 4px 16px rgba(45, 74, 62, 0.05);
     border: 1px solid #eef2f0;
+    overflow: visible !important; /* Prevents action menu clipping and inner scrolls */
 }
 .number { font-size: 30px; font-weight: bold; color: #3b6251; }
 label { display: block; margin-top: 12px; font-weight: bold; color: #43544c; }
@@ -415,7 +416,10 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; }
 th, td { padding: 11px; border-bottom: 1px solid #ebece8; text-align: left; }
 .clickable-row { cursor: pointer; transition: background 0.2s; }
 .clickable-row:hover { background: #f0f4f2; }
-.table-wrap { overflow-x: auto; }
+
+/* Table wrap with no internal vertical scroll and visible overflow for dropdowns */
+.table-wrap { width: 100%; overflow-x: auto; overflow-y: visible !important; }
+
 .badge { background: #e3ece8; color: #2d4a3e; padding: 5px 8px; border-radius: 20px; font-weight: 600; }
 .muted { color: #7a8c83; }
 .alert { background: #fbf0ee; color: #8a332d; padding: 12px 16px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #c85a54; }
@@ -453,6 +457,76 @@ footer strong { color: #e8c580; }
 .text-weak { color: #c85a54; }
 .text-moderate { color: #dfa85b; }
 .text-strong { color: #52826e; }
+
+/* 3-Dot Action Menu Styling */
+.action-menu-container {
+    position: relative;
+    display: inline-block;
+}
+.action-dots-btn {
+    background: #ffffff;
+    border: 1px solid #d8e0dc;
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #2d3732;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    transition: background 0.2s;
+}
+.action-dots-btn:hover {
+    background: #f0f4f2;
+}
+.action-dots-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+}
+.action-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 4px;
+    background: #ffffff;
+    min-width: 140px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    border: 1px solid #ebece8;
+    border-radius: 10px;
+    z-index: 999;
+    overflow: hidden;
+}
+.action-dropdown.show {
+    display: block;
+}
+.action-dropdown a, .action-dropdown button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 14px;
+    text-align: left;
+    background: none;
+    border: none;
+    color: #2d3732;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    margin: 0;
+}
+.action-dropdown a:hover, .action-dropdown button:hover {
+    background: #f0f4f2;
+    color: #183b35;
+}
+.action-dropdown button.text-danger, .action-dropdown a.text-danger {
+    color: #c85a54;
+}
+.action-dropdown button.text-danger:hover, .action-dropdown a.text-danger:hover {
+    background: #fbf0ee;
+}
 
 /* Modal Styles for Enlarging Data / Editing */
 .modal-overlay {
@@ -502,7 +576,7 @@ footer strong { color: #e8c580; }
         <a href="/inspections">Site Inspections</a>
         <a href="/reports">Reports & Audit Log</a>
         <a href="/tasks">Protégé Tasks</a>
-        <a href="/work-log">Work Logs</a>
+        <a href="/work-log">Protégé Work Logs</a>
         <a href="/submit-safety">Protégé Safety Inbox</a>
         <a href="/announcements">Announcements</a>
     {% elif session.get('role') == 'protege' %}
@@ -650,7 +724,149 @@ footer strong { color: #e8c580; }
     </div>
 </div>
 
-<!-- SVG Eye Definitions -->
+<!-- Edit Task Modal -->
+<div id="editTaskModal" class="modal-overlay" onclick="closeModalOverlay(event, 'editTaskModal')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <span class="modal-close" onclick="closeModalDirect('editTaskModal')">&times;</span>
+        <h3 style="margin-top:0; color:#183b35;">Edit Assigned Task</h3>
+        <form method="POST">
+            <input type="hidden" name="action" value="edit">
+            <input type="hidden" id="edit_task_id" name="task_id">
+            
+            <label>Protégé</label>
+            <select id="edit_task_user_id" name="user_id" required>
+                <!-- populated dynamically -->
+            </select>
+            
+            <label>Task Title</label>
+            <input type="text" id="edit_task_title" name="title" required maxlength="180">
+            
+            <label>Description / Expected Output</label>
+            <textarea id="edit_task_description" name="description" rows="3"></textarea>
+            
+            <label>Priority</label>
+            <select id="edit_task_priority" name="priority">
+                <option value="Low">Low</option>
+                <option value="Normal">Normal</option>
+                <option value="High">High</option>
+                <option value="Urgent">Urgent</option>
+            </select>
+            
+            <label>Due Date</label>
+            <input type="date" id="edit_task_due_date" name="due_date">
+            
+            <button type="submit" class="btn" style="margin-top: 15px;">Save Changes</button>
+            <button type="button" class="btn btn-danger" onclick="closeModalDirect('editTaskModal')" style="margin-top: 15px;">Cancel</button>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Announcement Modal -->
+<div id="editAnnouncementModal" class="modal-overlay" onclick="closeModalOverlay(event, 'editAnnouncementModal')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <span class="modal-close" onclick="closeModalDirect('editAnnouncementModal')">&times;</span>
+        <h3 style="margin-top:0; color:#183b35;">Edit Announcement</h3>
+        <form method="POST">
+            <input type="hidden" name="action" value="edit">
+            <input type="hidden" id="edit_ann_id" name="announcement_id">
+            
+            <label>Title</label>
+            <input type="text" id="edit_ann_title" name="title" required maxlength="180">
+            
+            <label>Details</label>
+            <textarea id="edit_ann_body" name="body" rows="4" required></textarea>
+            
+            <label>Type</label>
+            <select id="edit_ann_type" name="announcement_type">
+                <option value="General">General</option>
+                <option value="Training">Training</option>
+                <option value="Safety Briefing">Safety Briefing</option>
+                <option value="Deadline">Deadline</option>
+                <option value="Meeting">Meeting</option>
+                <option value="Site Notice">Site Notice</option>
+            </select>
+            
+            <label>Deadline (optional)</label>
+            <input type="date" id="edit_ann_due_date" name="due_date">
+            
+            <button type="submit" class="btn" style="margin-top: 15px;">Save Changes</button>
+            <button type="button" class="btn btn-danger" onclick="closeModalDirect('editAnnouncementModal')" style="margin-top: 15px;">Cancel</button>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Work Log Modal -->
+<div id="editWorkLogModal" class="modal-overlay" onclick="closeModalOverlay(event, 'editWorkLogModal')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <span class="modal-close" onclick="closeModalDirect('editWorkLogModal')">&times;</span>
+        <h3 style="margin-top:0; color:#183b35;">Edit Work Log</h3>
+        <form method="POST">
+            <input type="hidden" name="action" value="edit">
+            <input type="hidden" id="edit_log_id" name="log_id">
+            
+            <label>Activity Date</label>
+            <input type="date" id="edit_log_date" name="activity_date" required>
+            
+            <label>Activity / Task Title</label>
+            <input type="text" id="edit_log_title" name="activity_title" required maxlength="180">
+            
+            <label>What did you do?</label>
+            <textarea id="edit_log_desc" name="description" rows="3"></textarea>
+            
+            <label>Skills or knowledge learned</label>
+            <textarea id="edit_log_skills" name="skills_learned" rows="2"></textarea>
+            
+            <label>Challenges / follow-up needed</label>
+            <textarea id="edit_log_challenges" name="challenges" rows="2"></textarea>
+            
+            <label>Hours spent (optional)</label>
+            <input type="number" id="edit_log_hours" name="hours_spent" min="0" max="24" step="0.25">
+            
+            <button type="submit" class="btn" style="margin-top: 15px;">Save Changes</button>
+            <button type="button" class="btn btn-danger" onclick="closeModalDirect('editWorkLogModal')" style="margin-top: 15px;">Cancel</button>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Safety Submission Modal -->
+<div id="editSafetySubModal" class="modal-overlay" onclick="closeModalOverlay(event, 'editSafetySubModal')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <span class="modal-close" onclick="closeModalDirect('editSafetySubModal')">&times;</span>
+        <h3 style="margin-top:0; color:#183b35;">Edit Safety Submission</h3>
+        <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="action" value="edit">
+            <input type="hidden" id="edit_sub_id" name="submission_id">
+            
+            <label>Title</label>
+            <input type="text" id="edit_sub_title" name="title" required maxlength="150">
+            
+            <label>Category</label>
+            <select id="edit_sub_category" name="category" required>
+                <option value="Hazard">Hazard</option>
+                <option value="Near Miss">Near Miss</option>
+                <option value="Unsafe Act">Unsafe Act</option>
+                <option value="Unsafe Condition">Unsafe Condition</option>
+                <option value="Environmental">Environmental</option>
+                <option value="Traffic">Traffic</option>
+                <option value="Other">Other</option>
+            </select>
+            
+            <label>Location / site</label>
+            <input type="text" id="edit_sub_location" name="location" maxlength="180">
+            
+            <label>Description</label>
+            <textarea id="edit_sub_description" name="description" rows="4" required></textarea>
+            
+            <label>Replace photo / document (optional)</label>
+            <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg">
+            
+            <button type="submit" class="btn" style="margin-top: 15px;">Save Changes</button>
+            <button type="button" class="btn btn-danger" onclick="closeModalDirect('editSafetySubModal')" style="margin-top: 15px;">Cancel</button>
+        </form>
+    </div>
+</div>
+
+<!-- SVG Icon Definitions -->
 <svg style="display:none;">
   <g id="icon-eye-open">
     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -659,6 +875,19 @@ footer strong { color: #e8c580; }
   <g id="icon-eye-off">
     <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
     <line x1="1" y1="1" x2="23" y2="23"></line>
+  </g>
+  <g id="icon-three-dots">
+    <circle cx="12" cy="5" r="2"></circle>
+    <circle cx="12" cy="12" r="2"></circle>
+    <circle cx="12" cy="19" r="2"></circle>
+  </g>
+  <g id="icon-edit-pencil">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+  </g>
+  <g id="icon-trash">
+    <polyline points="3 6 5 6 21 6"></polyline>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
   </g>
 </svg>
 
@@ -674,6 +903,23 @@ function togglePasswordVisibility(inputId, btn) {
         svg.innerHTML = '<use href="#icon-eye-open"></use>';
     }
 }
+
+function toggleActionMenu(event, menuId) {
+    event.stopPropagation();
+    document.querySelectorAll('.action-dropdown').forEach(menu => {
+        if (menu.id !== menuId) menu.classList.remove('show');
+    });
+    const menu = document.getElementById(menuId);
+    if (menu) {
+        menu.classList.toggle('show');
+    }
+}
+
+window.addEventListener('click', function() {
+    document.querySelectorAll('.action-dropdown').forEach(menu => {
+        menu.classList.remove('show');
+    });
+});
 
 function checkPasswordStrength(password) {
     const indicator = document.getElementById("strength-indicator");
@@ -766,6 +1012,51 @@ function openEditCidbModal(id, title) {
     document.getElementById('editCidbModal').style.display = 'flex';
 }
 
+function openEditTaskModal(id, userId, title, description, priority, dueDate) {
+    document.getElementById('edit_task_id').value = id;
+    document.getElementById('edit_task_title').value = title;
+    document.getElementById('edit_task_description').value = description;
+    document.getElementById('edit_task_priority').value = priority;
+    document.getElementById('edit_task_due_date').value = dueDate;
+    
+    const mainSelect = document.querySelector('select[name="user_id"]');
+    const editSelect = document.getElementById('edit_task_user_id');
+    if (mainSelect && editSelect) {
+        editSelect.innerHTML = mainSelect.innerHTML;
+        editSelect.value = userId;
+    }
+    document.getElementById('editTaskModal').style.display = 'flex';
+}
+
+function openEditAnnouncementModal(id, title, body, annType, dueDate) {
+    document.getElementById('edit_ann_id').value = id;
+    document.getElementById('edit_ann_title').value = title;
+    document.getElementById('edit_ann_body').value = body;
+    document.getElementById('edit_ann_type').value = annType;
+    document.getElementById('edit_ann_due_date').value = dueDate;
+    document.getElementById('editAnnouncementModal').style.display = 'flex';
+}
+
+function openEditWorkLogModal(id, activityDate, title, description, skills, challenges, hours) {
+    document.getElementById('edit_log_id').value = id;
+    document.getElementById('edit_log_date').value = activityDate;
+    document.getElementById('edit_log_title').value = title;
+    document.getElementById('edit_log_desc').value = description;
+    document.getElementById('edit_log_skills').value = skills;
+    document.getElementById('edit_log_challenges').value = challenges;
+    document.getElementById('edit_log_hours').value = hours;
+    document.getElementById('editWorkLogModal').style.display = 'flex';
+}
+
+function openEditSafetySubModal(id, title, category, location, description) {
+    document.getElementById('edit_sub_id').value = id;
+    document.getElementById('edit_sub_title').value = title;
+    document.getElementById('edit_sub_category').value = category;
+    document.getElementById('edit_sub_location').value = location;
+    document.getElementById('edit_sub_description').value = description;
+    document.getElementById('editSafetySubModal').style.display = 'flex';
+}
+
 // Toggle Custom Dates visibility for reports filter
 document.addEventListener('DOMContentLoaded', function() {
     const filterSelect = document.querySelector('select[name="filter"]');
@@ -786,6 +1077,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
 def page(content, **data):
   return render_template_string(PAGE, content=content, **data)
+
+
+def action_menu_html(menu_id, items_html):
+  return f"""
+  <div class="action-menu-container">
+      <button type="button" class="action-dots-btn" onclick="toggleActionMenu(event, '{menu_id}')">
+          <svg viewBox="0 0 24 24"><use href="#icon-three-dots"></use></svg>
+      </button>
+      <div id="{menu_id}" class="action-dropdown">
+          {items_html}
+      </div>
+  </div>
+  """
 
 
 # ---------- AUTHENTICATION & REGISTRATION ROUTES ----------
@@ -1177,7 +1481,7 @@ def safety():
     conn.close()
 
   table_html = (
-      "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Title</th><th>Category</th><th>Description</th><th>File</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead><tbody>"
+      "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Title</th><th>Category</th><th>Description</th><th>File</th><th>Status</th><th>Date</th><th>Action</th></tr></thead><tbody>"
   )
   for r in rows:
     file_link = (
@@ -1188,6 +1492,21 @@ def safety():
     escaped_title = r["title"].replace("'", "\\'")
     escaped_category = r["category"].replace("'", "\\'")
     escaped_desc = (r["description"] or "").replace("'", "\\'").replace("\n", " ")
+
+    menu_id = f"safety_menu_{r['id']}"
+    menu_items = f"""
+        <button type="button" onclick="openEditSafetyModal('{r['id']}', '{escaped_title}', '{escaped_category}', '{escaped_desc}')">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
+        </button>
+        <form method="post" onsubmit="return confirm('Delete this report?');" style="margin:0;">
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="report_id" value="{r['id']}">
+            <button type="submit" class="text-danger">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+            </button>
+        </form>
+    """
+    actions_td = action_menu_html(menu_id, menu_items)
 
     table_html += f"""
         <tr>
@@ -1208,14 +1527,7 @@ def safety():
                 </form>
             </td>
             <td>{r['created_at']}</td>
-            <td>
-                <button type="button" class="btn btn-warning btn-sm" onclick="openEditSafetyModal('{r['id']}', '{escaped_title}', '{escaped_category}', '{escaped_desc}')">Edit</button>
-                <form method="post" onsubmit="return confirm('Delete this report?');" style="display:inline;">
-                    <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="report_id" value="{r['id']}">
-                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                </form>
-            </td>
+            <td>{actions_td}</td>
         </tr>
         """
   table_html += "</tbody></table></div>"
@@ -1343,7 +1655,7 @@ def documents():
 
   table_html = (
       "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Title</th><th>Type</th><th>File</th><th>Review"
-      " Date</th><th>Actions</th></tr></thead><tbody>"
+      " Date</th><th>Action</th></tr></thead><tbody>"
   )
   for r in rows:
     file_link = (
@@ -1354,6 +1666,21 @@ def documents():
     escaped_title = r["title"].replace("'", "\\'")
     r_date = r["review_date"] or ""
 
+    menu_id = f"doc_menu_{r['id']}"
+    menu_items = f"""
+        <button type="button" onclick="openEditDocModal('{r['id']}', '{escaped_title}', '{r['doc_type']}', '{r_date}')">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
+        </button>
+        <form method="post" onsubmit="return confirm('Delete this document?');" style="margin:0;">
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="doc_id" value="{r['id']}">
+            <button type="submit" class="text-danger">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+            </button>
+        </form>
+    """
+    actions_td = action_menu_html(menu_id, menu_items)
+
     table_html += f"""
         <tr>
             <td>{r['id']}</td>
@@ -1361,14 +1688,7 @@ def documents():
             <td>{r['doc_type']}</td>
             <td>{file_link}</td>
             <td>{r['review_date'] or '-'}</td>
-            <td>
-                <button type="button" class="btn btn-warning btn-sm" onclick="openEditDocModal('{r['id']}', '{escaped_title}', '{r['doc_type']}', '{r_date}')">Edit</button>
-                <form method="post" onsubmit="return confirm('Delete this document?');" style="display:inline;">
-                    <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="doc_id" value="{r['id']}">
-                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                </form>
-            </td>
+            <td>{actions_td}</td>
         </tr>
         """
   table_html += "</tbody></table></div>"
@@ -1498,7 +1818,7 @@ def training():
 
   table_html = (
       "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Employee</th><th>Course</th><th>File</th><th>Expiry"
-      " Date</th><th>Actions</th></tr></thead><tbody>"
+      " Date</th><th>Action</th></tr></thead><tbody>"
   )
   for r in rows:
     file_link = (
@@ -1510,6 +1830,21 @@ def training():
     escaped_crs = r["course"].replace("'", "\\'")
     e_date = r["expiry_date"] or ""
 
+    menu_id = f"train_menu_{r['id']}"
+    menu_items = f"""
+        <button type="button" onclick="openEditTrainingModal('{r['id']}', '{escaped_emp}', '{escaped_crs}', '{e_date}')">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
+        </button>
+        <form method="post" onsubmit="return confirm('Delete this record?');" style="margin:0;">
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="train_id" value="{r['id']}">
+            <button type="submit" class="text-danger">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+            </button>
+        </form>
+    """
+    actions_td = action_menu_html(menu_id, menu_items)
+
     table_html += f"""
         <tr>
             <td>{r['id']}</td>
@@ -1517,14 +1852,7 @@ def training():
             <td>{r['course']}</td>
             <td>{file_link}</td>
             <td>{r['expiry_date'] or '-'}</td>
-            <td>
-                <button type="button" class="btn btn-warning btn-sm" onclick="openEditTrainingModal('{r['id']}', '{escaped_emp}', '{escaped_crs}', '{e_date}')">Edit</button>
-                <form method="post" onsubmit="return confirm('Delete this record?');" style="display:inline;">
-                    <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="train_id" value="{r['id']}">
-                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                </form>
-            </td>
+            <td>{actions_td}</td>
         </tr>
         """
   table_html += "</tbody></table></div>"
@@ -1663,11 +1991,27 @@ def my_cidb():
 
   table_html = (
       "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Title</th><th>File</th><th>Uploaded"
-      " Date</th><th>Review Status</th><th>Review Note</th><th>Actions</th></tr></thead><tbody>"
+      " Date</th><th>Review Status</th><th>Review Note</th><th>Action</th></tr></thead><tbody>"
   )
   for r in rows:
     file_link = f'<a href="/uploads/{r["filename"]}" target="_blank">View File</a>'
     escaped_title = r["title"].replace("'", "\\'")
+
+    menu_id = f"mycidb_menu_{r['id']}"
+    menu_items = f"""
+        <button type="button" onclick="openEditCidbModal('{r['id']}', '{escaped_title}')">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
+        </button>
+        <form method="post" onsubmit="return confirm('Delete this record?');" style="margin:0;">
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="record_id" value="{r['id']}">
+            <button type="submit" class="text-danger">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+            </button>
+        </form>
+    """
+    actions_td = action_menu_html(menu_id, menu_items)
+
     table_html += f"""
         <tr>
             <td>{r['id']}</td>
@@ -1676,14 +2020,7 @@ def my_cidb():
             <td>{r['uploaded_at']}</td>
             <td><span class="badge">{r.get('review_status', 'Pending')}</span></td>
             <td>{escape(r.get('review_note') or '—')}</td>
-            <td>
-                <button type="button" class="btn btn-warning btn-sm" onclick="openEditCidbModal('{r['id']}', '{escaped_title}')">Edit</button>
-                <form method="post" onsubmit="return confirm('Delete this record?');" style="display:inline;">
-                    <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="record_id" value="{r['id']}">
-                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                </form>
-            </td>
+            <td>{actions_td}</td>
         </tr>
         """
   table_html += "</tbody></table></div>"
@@ -1774,6 +2111,24 @@ def tasks():
         log_action("delete_protege_task", f"Task {task_id}")
         flash("Task deleted.")
         return redirect(url_for("tasks"))
+      elif action == "edit":
+        task_id = request.form.get("task_id", type=int)
+        user_id = request.form.get("user_id", type=int)
+        title = request.form.get("title", "").strip()
+        description = request.form.get("description", "").strip()
+        priority = request.form.get("priority", "Normal")
+        due_raw = request.form.get("due_date", "").strip() or None
+        if not task_id or not user_id or not title:
+          flash("Task ID, assigned user, and title are required for updating.")
+        else:
+          with conn.cursor() as db:
+            db.execute("UPDATE protege_tasks SET user_id=%s, title=%s, description=%s, priority=%s, due_date=%s WHERE id=%s",
+                       (user_id, title, description or None, priority, due_raw, task_id))
+          conn.commit()
+          log_action("edit_protege_task", f"Updated task {task_id}")
+          flash("Task updated successfully.")
+          return redirect(url_for("tasks"))
+      
       user_id = request.form.get("user_id", type=int)
       title = request.form.get("title", "").strip()
       description = request.form.get("description", "").strip()
@@ -1802,10 +2157,28 @@ def tasks():
   finally:
     conn.close()
   user_options = "".join(f"<option value='{u['id']}'>{escape(u['username'])}</option>" for u in users)
-  table = "<div class='table-wrap'><table><thead><tr><th>Protégé</th><th>Task</th><th>Priority</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody>"
+  table = "<div class='table-wrap'><table><thead><tr><th>Protégé</th><th>Task</th><th>Priority</th><th>Due</th><th>Status</th><th>Action</th></tr></thead><tbody>"
   for r in rows:
     due = r['due_date'].strftime('%d %b %Y') if r['due_date'] else '—'
-    table += f"<tr><td>{escape(r['username'])}</td><td>{escape(r['title'])}<br><span class='muted'>{escape(r['description'] or '')}</span></td><td>{escape(r['priority'])}</td><td>{due}</td><td>{escape(r['status'])}</td><td><form method='post' onsubmit=\"return confirm('Delete this task?')\"><input type='hidden' name='action' value='delete'><input type='hidden' name='task_id' value='{r['id']}'><button class='btn-danger btn-sm'>Delete</button></form></td></tr>"
+    due_iso = r['due_date'].strftime('%Y-%m-%d') if r['due_date'] else ''
+    escaped_title = (r['title'] or '').replace("'", "\\'")
+    escaped_desc = (r['description'] or '').replace("'", "\\'").replace("\n", " ")
+    
+    menu_id = f"task_menu_{r['id']}"
+    menu_items = f"""
+        <button type="button" onclick="openEditTaskModal('{r['id']}', '{r['user_id']}', '{escaped_title}', '{escaped_desc}', '{r['priority']}', '{due_iso}')">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
+        </button>
+        <form method='post' onsubmit="return confirm('Delete this task?')" style="margin:0;">
+            <input type='hidden' name='action' value='delete'>
+            <input type='hidden' name='task_id' value='{r['id']}'>
+            <button type="submit" class="text-danger">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+            </button>
+        </form>
+    """
+    actions_td = action_menu_html(menu_id, menu_items)
+    table += f"<tr><td>{escape(r['username'])}</td><td>{escape(r['title'])}<br><span class='muted'>{escape(r['description'] or '')}</span></td><td>{escape(r['priority'])}</td><td>{due}</td><td>{escape(r['status'])}</td><td>{actions_td}</td></tr>"
   table += "</tbody></table></div>"
   return page(f"<h2>Protégé Task Management</h2><section class='panel'><h3>Assign a Task</h3><form method='post'><label>Protégé</label><select name='user_id' required>{user_options}</select><label>Task title</label><input name='title' maxlength='180' required><label>Description / expected output</label><textarea name='description' rows='3'></textarea><label>Priority</label><select name='priority'><option>Low</option><option selected>Normal</option><option>High</option><option>Urgent</option></select><label>Due date</label><input type='date' name='due_date'><button type='submit'>Assign Task</button></form></section><section class='panel'><h3>All Assigned Tasks</h3>{table}</section>")
 
@@ -1820,6 +2193,45 @@ def work_log():
   conn = get_db()
   try:
     if request.method == "POST":
+      action = request.form.get("action", "add")
+      if action == "delete":
+        log_id = request.form.get("log_id", type=int)
+        with conn.cursor() as db:
+          if is_admin:
+            db.execute("DELETE FROM protege_work_logs WHERE id=%s", (log_id,))
+          else:
+            db.execute("DELETE FROM protege_work_logs WHERE id=%s AND user_id=%s", (log_id, session["user_id"]))
+        conn.commit()
+        flash("Work log deleted.")
+        return redirect(url_for("work_log"))
+      elif action == "edit":
+        log_id = request.form.get("log_id", type=int)
+        activity_date = request.form.get("activity_date", "").strip()
+        title = request.form.get("activity_title", "").strip()
+        description = request.form.get("description", "").strip()
+        skills = request.form.get("skills_learned", "").strip()
+        challenges = request.form.get("challenges", "").strip()
+        hours = request.form.get("hours_spent", "").strip() or None
+        try:
+          if hours is not None and (float(hours) < 0 or float(hours) > 24):
+            raise ValueError
+        except ValueError:
+          flash("Hours must be a number between 0 and 24.")
+          return redirect(url_for("work_log"))
+        if not log_id or not activity_date or not title:
+          flash("Activity date and title are required.")
+          return redirect(url_for("work_log"))
+        with conn.cursor() as db:
+          if is_admin:
+            db.execute("UPDATE protege_work_logs SET activity_date=%s, activity_title=%s, description=%s, skills_learned=%s, challenges=%s, hours_spent=%s WHERE id=%s",
+                       (activity_date, title, description or None, skills or None, challenges or None, hours, log_id))
+          else:
+            db.execute("UPDATE protege_work_logs SET activity_date=%s, activity_title=%s, description=%s, skills_learned=%s, challenges=%s, hours_spent=%s WHERE id=%s AND user_id=%s",
+                       (activity_date, title, description or None, skills or None, challenges or None, hours, log_id, session["user_id"]))
+        conn.commit()
+        flash("Work log updated.")
+        return redirect(url_for("work_log"))
+
       if is_admin:
         flash("Admins can review logs here; Protégés submit their own logs from their account.")
         return redirect(url_for("work_log"))
@@ -1853,12 +2265,33 @@ def work_log():
       rows = db.fetchall()
   finally:
     conn.close()
-  table = "<div class='table-wrap'><table><thead><tr><th>Date</th><th>Protégé</th><th>Activity</th><th>Skills learned</th><th>Hours</th><th>Review</th></tr></thead><tbody>"
+  table = "<div class='table-wrap'><table><thead><tr><th>Date</th><th>Protégé</th><th>Activity</th><th>Skills learned</th><th>Hours</th><th>Review</th><th>Action</th></tr></thead><tbody>"
   for r in rows:
     d = r['activity_date'].strftime('%d %b %Y') if r['activity_date'] else '—'
-    table += f"<tr><td>{d}</td><td>{escape(r['username'])}</td><td><strong>{escape(r['activity_title'])}</strong><br>{escape(r['description'] or '')}<br><span class='muted'>Challenges: {escape(r['challenges'] or '—')}</span></td><td>{escape(r['skills_learned'] or '—')}</td><td>{escape(str(r['hours_spent']) if r['hours_spent'] is not None else '—')}</td><td>{escape(r['status'])}{('<br>'+escape(r['supervisor_feedback'])) if r['supervisor_feedback'] else ''}</td></tr>"
+    d_iso = r['activity_date'].strftime('%Y-%m-%d') if r['activity_date'] else ''
+    escaped_title = (r['activity_title'] or '').replace("'", "\\'")
+    escaped_desc = (r['description'] or '').replace("'", "\\'").replace("\n", " ")
+    escaped_skills = (r['skills_learned'] or '').replace("'", "\\'").replace("\n", " ")
+    escaped_chal = (r['challenges'] or '').replace("'", "\\'").replace("\n", " ")
+    hours_val = r['hours_spent'] if r['hours_spent'] is not None else ''
+
+    menu_id = f"worklog_menu_{r['id']}"
+    menu_items = f"""
+        <button type="button" onclick="openEditWorkLogModal('{r['id']}', '{d_iso}', '{escaped_title}', '{escaped_desc}', '{escaped_skills}', '{escaped_chal}', '{hours_val}')">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
+        </button>
+        <form method='post' onsubmit="return confirm('Delete this work log?')" style="margin:0;">
+            <input type='hidden' name='action' value='delete'>
+            <input type='hidden' name='log_id' value='{r['id']}'>
+            <button type="submit" class="text-danger">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+            </button>
+        </form>
+    """
+    actions_td = action_menu_html(menu_id, menu_items)
+    table += f"<tr><td>{d}</td><td>{escape(r['username'])}</td><td><strong>{escape(r['activity_title'])}</strong><br>{escape(r['description'] or '')}<br><span class='muted'>Challenges: {escape(r['challenges'] or '—')}</span></td><td>{escape(r['skills_learned'] or '—')}</td><td>{escape(str(r['hours_spent']) if r['hours_spent'] is not None else '—')}</td><td>{escape(r['status'])}{('<br>'+escape(r['supervisor_feedback'])) if r['supervisor_feedback'] else ''}</td><td>{actions_td}</td></tr>"
   if not rows:
-    table += "<tr><td colspan='6' class='muted'>No work logs submitted yet.</td></tr>"
+    table += "<tr><td colspan='7' class='muted'>No work logs submitted yet.</td></tr>"
   table += "</tbody></table></div>"
   form = ""
   if not is_admin:
@@ -1915,6 +2348,55 @@ def submit_safety():
   conn = get_db()
   try:
     if request.method == "POST":
+      action = request.form.get("action", "add")
+      if action == "delete":
+        sub_id = request.form.get("submission_id", type=int)
+        with conn.cursor() as db:
+          if is_admin:
+            db.execute("SELECT filename FROM protege_safety_submissions WHERE id=%s", (sub_id,))
+            row = db.fetchone()
+            if row and row["filename"]:
+              f_path = app.config["UPLOAD_FOLDER"] / row["filename"]
+              if f_path.exists(): f_path.unlink(missing_ok=True)
+            db.execute("DELETE FROM protege_safety_submissions WHERE id=%s", (sub_id,))
+          else:
+            db.execute("SELECT filename FROM protege_safety_submissions WHERE id=%s AND user_id=%s", (sub_id, session["user_id"]))
+            row = db.fetchone()
+            if row and row["filename"]:
+              f_path = app.config["UPLOAD_FOLDER"] / row["filename"]
+              if f_path.exists(): f_path.unlink(missing_ok=True)
+            db.execute("DELETE FROM protege_safety_submissions WHERE id=%s AND user_id=%s", (sub_id, session["user_id"]))
+        conn.commit()
+        flash("Safety submission deleted.")
+        return redirect(url_for("submit_safety"))
+      elif action == "edit":
+        sub_id = request.form.get("submission_id", type=int)
+        title = request.form.get('title','').strip()
+        category = request.form.get('category','Other').strip()
+        location = request.form.get('location','').strip()
+        description = request.form.get('description','').strip()
+        file = request.files.get('file')
+        if not sub_id or not title or not description:
+          flash('Submission ID, title, and description are required.')
+        else:
+          new_file = save_upload(file, 'safety') if file and file.filename else None
+          with conn.cursor() as db:
+            if is_admin:
+              db.execute("SELECT filename FROM protege_safety_submissions WHERE id=%s", (sub_id,))
+              row = db.fetchone()
+              filename = new_file or (row.get("filename") if row else None)
+              db.execute("UPDATE protege_safety_submissions SET title=%s, category=%s, location=%s, description=%s, filename=%s WHERE id=%s",
+                         (title, category, location or None, description, filename, sub_id))
+            else:
+              db.execute("SELECT filename FROM protege_safety_submissions WHERE id=%s AND user_id=%s", (sub_id, session["user_id"]))
+              row = db.fetchone()
+              filename = new_file or (row.get("filename") if row else None)
+              db.execute("UPDATE protege_safety_submissions SET title=%s, category=%s, location=%s, description=%s, filename=%s, status='Submitted', admin_response=NULL WHERE id=%s AND user_id=%s",
+                         (title, category, location or None, description, filename, sub_id, session["user_id"]))
+          conn.commit()
+          flash("Safety submission updated.")
+          return redirect(url_for("submit_safety"))
+
       if is_admin:
         submission_id = request.form.get('submission_id', type=int)
         status = request.form.get('status', 'Submitted')
@@ -1957,15 +2439,35 @@ def submit_safety():
     form = "<section class='panel'><h3>Submit a Safety Concern / Hazard</h3><p class='muted'>For emergencies, immediately notify the site supervisor or emergency response team. This form is for recording and follow-up, not emergency response.</p><form method='post' enctype='multipart/form-data'><label>Title</label><input name='title' maxlength='150' required><label>Category</label><select name='category'><option>Hazard</option><option>Near Miss</option><option>Unsafe Act</option><option>Unsafe Condition</option><option>Environmental</option><option>Traffic</option><option>Other</option></select><label>Location / site</label><input name='location' maxlength='180'><label>Description</label><textarea name='description' rows='4' required></textarea><label>Attach photo / document (optional)</label><input type='file' name='file' accept='.pdf,.png,.jpg,.jpeg'><button type='submit'>Submit to QSHET</button></form></section>"
   table = "<div class='table-wrap'><table><thead><tr><th>Date</th><th>Submitted by</th><th>Concern</th><th>Location</th><th>Status / response</th>"
   if is_admin: table += "<th>Review</th>"
-  table += "</tr></thead><tbody>"
+  table += "<th>Action</th></tr></thead><tbody>"
   for r in rows:
     created = r['created_at'].strftime('%d %b %Y %H:%M') if r['created_at'] else '—'
     file_link = f"<br><a href='/uploads/{quote(r['filename'])}' target='_blank'>Attachment</a>" if r['filename'] else ''
     status_options = "".join("<option %s>%s</option>" % ("selected" if r['status'] == st else "", st) for st in ['Submitted', 'Under Review', 'Action Required', 'Resolved', 'Closed'])
     review = f"<form method='post'><input type='hidden' name='submission_id' value='{r['id']}'><select name='status'>{status_options}</select><textarea name='admin_response' rows='2' placeholder='Response / action taken'>{escape(r['admin_response'] or '')}</textarea><button class='btn-sm'>Save</button></form>" if is_admin else ""
-    table += f"<tr><td>{created}</td><td>{escape(r['username'])}</td><td><strong>{escape(r['title'])}</strong> ({escape(r['category'])})<br>{escape(r['description'])}{file_link}</td><td>{escape(r['location'] or '—')}</td><td><span class='badge'>{escape(r['status'])}</span><br>{escape(r['admin_response'] or 'No response yet')}</td>" + (f"<td>{review}</td>" if is_admin else '') + "</tr>"
+    
+    escaped_title = (r['title'] or '').replace("'", "\\'")
+    escaped_loc = (r['location'] or '').replace("'", "\\'")
+    escaped_desc = (r['description'] or '').replace("'", "\\'").replace("\n", " ")
+
+    menu_id = f"safetysub_menu_{r['id']}"
+    menu_items = f"""
+        <button type="button" onclick="openEditSafetySubModal('{r['id']}', '{escaped_title}', '{r['category']}', '{escaped_loc}', '{escaped_desc}')">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
+        </button>
+        <form method='post' onsubmit="return confirm('Delete this safety submission?')" style="margin:0;">
+            <input type='hidden' name='action' value='delete'>
+            <input type='hidden' name='submission_id' value='{r['id']}'>
+            <button type="submit" class="text-danger">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+            </button>
+        </form>
+    """
+    actions_td = action_menu_html(menu_id, menu_items)
+
+    table += f"<tr><td>{created}</td><td>{escape(r['username'])}</td><td><strong>{escape(r['title'])}</strong> ({escape(r['category'])})<br>{escape(r['description'])}{file_link}</td><td>{escape(r['location'] or '—')}</td><td><span class='badge'>{escape(r['status'])}</span><br>{escape(r['admin_response'] or 'No response yet')}</td>" + (f"<td>{review}</td>" if is_admin else '') + f"<td>{actions_td}</td></tr>"
   if not rows:
-    table += f"<tr><td colspan='{6 if is_admin else 5}' class='muted'>No submissions yet.</td></tr>"
+    table += f"<tr><td colspan='{(7 if is_admin else 6)}' class='muted'>No submissions yet.</td></tr>"
   table += "</tbody></table></div>"
   return page(f"<h2>{'Protégé Safety Inbox' if is_admin else 'Submit Safety Report'}</h2>{form}<section class='panel'><h3>{'All Protégé Submissions' if is_admin else 'My Submissions & Status'}</h3>{table}</section>")
 
@@ -1987,6 +2489,23 @@ def announcements():
         conn.commit()
         flash('Announcement deleted.')
         return redirect(url_for('announcements'))
+      elif action == 'edit':
+        ann_id = request.form.get('announcement_id', type=int)
+        title = request.form.get('title','').strip()
+        body = request.form.get('body','').strip()
+        typ = request.form.get('announcement_type','General').strip()
+        due = request.form.get('due_date','').strip() or None
+        if not ann_id or not title or not body:
+          flash('Announcement ID, title, and details are required.')
+        else:
+          with conn.cursor() as db:
+            db.execute("UPDATE protege_announcements SET title=%s, body=%s, announcement_type=%s, due_date=%s WHERE id=%s",
+                       (title, body, typ, due, ann_id))
+          conn.commit()
+          log_action('edit_announcement', f'Updated announcement {ann_id}')
+          flash('Announcement updated successfully.')
+          return redirect(url_for('announcements'))
+
       title = request.form.get('title','').strip()
       body = request.form.get('body','').strip()
       typ = request.form.get('announcement_type','General').strip()
@@ -2011,9 +2530,28 @@ def announcements():
   cards = ''
   for r in rows:
     due = r['due_date'].strftime('%d %b %Y') if r['due_date'] else 'No deadline'
+    due_iso = r['due_date'].strftime('%Y-%m-%d') if r['due_date'] else ''
     created = r['created_at'].strftime('%d %b %Y') if r['created_at'] else ''
-    delete = f"<form method='post' onsubmit=\"return confirm('Delete announcement?')\"><input type='hidden' name='action' value='delete'><input type='hidden' name='announcement_id' value='{r['id']}'><button class='btn-danger btn-sm'>Delete</button></form>" if is_admin else ''
-    cards += f"<article class='panel'><span class='badge'>{escape(r['announcement_type'])}</span><h3>{escape(r['title'])}</h3><p>{escape(r['body'])}</p><p class='muted'>Posted {created} by {escape(r['author'] or 'QSHET Admin')} · {due}</p>{delete}</article>"
+    escaped_title = (r['title'] or '').replace("'", "\\'")
+    escaped_body = (r['body'] or '').replace("'", "\\'").replace("\n", " ")
+
+    menu_id = f"ann_menu_{r['id']}"
+    menu_items = f""
+    if is_admin:
+      menu_items += f"""
+        <button type="button" onclick="openEditAnnouncementModal('{r['id']}', '{escaped_title}', '{escaped_body}', '{r['announcement_type']}', '{due_iso}')">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
+        </button>
+        <form method='post' onsubmit="return confirm('Delete announcement?')" style="margin:0;">
+            <input type='hidden' name='action' value='delete'>
+            <input type='hidden' name='announcement_id' value='{r['id']}'>
+            <button type="submit" class="text-danger">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+            </button>
+        </form>
+      """
+    action_menu_block = f"<div style='margin-top:10px;'>{action_menu_html(menu_id, menu_items)}</div>" if is_admin else ''
+    cards += f"<article class='panel'><span class='badge'>{escape(r['announcement_type'])}</span><h3>{escape(r['title'])}</h3><p>{escape(r['body'])}</p><p class='muted'>Posted {created} by {escape(r['author'] or 'QSHET Admin')} · {due}</p>{action_menu_block}</article>"
   if not cards: cards = "<section class='panel muted'>No announcements have been published.</section>"
   return page(f"<h2>Announcements & Reminders</h2>{form}{cards}")
 
@@ -2085,11 +2623,27 @@ def manage_cidb():
   table_html = (
       "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Protégé"
       " Username</th><th>Title</th><th>File</th><th>Uploaded"
-      " Date</th><th>Review</th><th>Actions</th></tr></thead><tbody>"
+      " Date</th><th>Review</th><th>Action</th></tr></thead><tbody>"
   )
   for r in rows:
     file_link = f'<a href="/uploads/{r["filename"]}" target="_blank">View File</a>'
     escaped_title = r["title"].replace("'", "\\'")
+
+    menu_id = f"managecidb_menu_{r['id']}"
+    menu_items = f"""
+        <button type="button" onclick="openEditCidbModal('{r['id']}', '{escaped_title}')">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
+        </button>
+        <form method="post" onsubmit="return confirm('Delete this record?');" style="margin:0;">
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="record_id" value="{r['id']}">
+            <button type="submit" class="text-danger">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+            </button>
+        </form>
+    """
+    actions_td = action_menu_html(menu_id, menu_items)
+
     table_html += f"""
         <tr>
             <td>{r['id']}</td>
@@ -2110,14 +2664,7 @@ def manage_cidb():
                     <button class="btn-sm" type="submit">Save Review</button>
                 </form>
             </td>
-            <td>
-                <button type="button" class="btn btn-warning btn-sm" onclick="openEditCidbModal('{r['id']}', '{escaped_title}')">Edit</button>
-                <form method="post" onsubmit="return confirm('Delete this record?');" style="display:inline;">
-                    <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="record_id" value="{r['id']}">
-                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                </form>
-            </td>
+            <td>{actions_td}</td>
         </tr>
         """
   table_html += "</tbody></table></div>"
@@ -2203,15 +2750,30 @@ def manage_users():
   table_rows_html = ""
   for u in users:
     is_current = (u['id'] == session.get('user_id'))
+    menu_id = f"user_menu_{u['id']}"
+    menu_items = f"""
+        <a href="/edit-user/{u['id']}">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Update
+        </a>
+    """
+    if not is_current:
+      menu_items += f"""
+        <form method="post" onsubmit="return confirm('Delete this user and their records?');" style="margin:0;">
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="user_id" value="{u['id']}">
+            <button type="submit" class="text-danger">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+            </button>
+        </form>
+      """
+    actions_td = action_menu_html(menu_id, menu_items) if not is_current else '<span class="muted" style="font-size:12px;">Active</span>'
+
     table_rows_html += f"""
         <tr>
             <td>{u['id']}</td>
             <td><strong>{u['username']}</strong></td>
             <td><span class="badge">{u['role'].capitalize()}</span></td>
-            <td>
-                <a href="/edit-user/{u['id']}" class="btn btn-sm" style="background:#23594b; text-decoration:none; display:inline-block; margin-top:0;">Update</a>
-                {'<form method="post" style="display:inline; margin-left:6px;"><input type="hidden" name="action" value="delete"><input type="hidden" name="user_id" value="' + str(u['id']) + '"><button type="submit" class="btn btn-danger btn-sm" onclick="return confirm(\'Delete this user and their records?\');">Delete</button></form>' if not is_current else '<span class="muted" style="margin-left:8px; font-size:12px;">Active</span>'}
-            </td>
+            <td>{actions_td}</td>
         </tr>
     """
 
@@ -2243,7 +2805,7 @@ def manage_users():
                     <th>ID</th>
                     <th>Username</th>
                     <th>Role</th>
-                    <th>Actions</th>
+                    <th>Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -2416,9 +2978,29 @@ def employees():
   e = editing or {}
   field = lambda name: escape(str(e.get(name) or ""))
   selected = lambda val: "selected" if e.get("employment_status", "Active") == val else ""
-  tr = "".join(
-    f"<tr><td>{escape(str(r['full_name'] or ''))}</td><td>{escape(str(r['staff_id'] or '-'))}</td><td>{escape(str(r['department'] or '-'))}</td><td>{escape(str(r['position'] or '-'))}</td><td>{escape(str(r['cidb_number'] or '-'))}</td><td>{escape(str(r['cidb_expiry'] or '-'))}</td><td>{escape(str(r['employment_status'] or ''))}</td><td>{('<a target=\'_blank\' href=\'/uploads/' + quote(str(r['filename']), safe='') + '\'>View file</a> · ') if r.get('filename') else ''}<a class='btn btn-sm' href='/employees?edit={r['id']}'>Edit</a> <form method='post' style='display:inline' onsubmit=\"return confirm('Delete this profile?')\"><input type='hidden' name='action' value='delete'><input type='hidden' name='employee_id' value='{r['id']}'><button class='btn btn-danger btn-sm'>Delete</button></form></td></tr>" for r in rows
-  ) or "<tr><td colspan='8'>No profiles yet.</td></tr>"
+  
+  tr_list = []
+  for r in rows:
+    menu_id = f"emp_menu_{r['id']}"
+    menu_items = f"""
+        <a href='/employees?edit={r['id']}'>
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
+        </a>
+        <form method='post' onsubmit="return confirm('Delete this profile?')" style="margin:0;">
+            <input type='hidden' name='action' value='delete'>
+            <input type='hidden' name='employee_id' value='{r['id']}'>
+            <button type="submit" class="text-danger">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+            </button>
+        </form>
+    """
+    actions_td = action_menu_html(menu_id, menu_items)
+    file_view = f"<a target='_blank' href='/uploads/{quote(str(r['filename']), safe='')}'>View file</a><br>" if r.get('filename') else ''
+    
+    tr_list.append(f"<tr><td>{escape(str(r['full_name'] or ''))}</td><td>{escape(str(r['staff_id'] or '-'))}</td><td>{escape(str(r['department'] or '-'))}</td><td>{escape(str(r['position'] or '-'))}</td><td>{escape(str(r['cidb_number'] or '-'))}</td><td>{escape(str(r['cidb_expiry'] or '-'))}</td><td>{escape(str(r['employment_status'] or ''))}</td><td>{file_view}{actions_td}</td></tr>")
+  
+  tr = "".join(tr_list) or "<tr><td colspan='8'>No profiles yet.</td></tr>"
+
   content = f"""<h2>Employee & Protégé Profiles</h2><section class='panel'><h3>{'Edit profile' if editing else 'Add profile'}</h3><form method='post' enctype='multipart/form-data'>
   <input type='hidden' name='action' value="{'edit' if editing else 'add'}"><input type='hidden' name='employee_id' value='{e.get('id','') if editing else ''}'>
   <label>Full name</label><input name='full_name' required maxlength='150' value='{field('full_name')}'>
@@ -2436,7 +3018,7 @@ def employees():
         </label>
         <input type="file" name="attachment" accept=".png, .jpg, .jpeg, .pdf">
   {'<p class="muted">An existing attachment will be kept if no new file is selected.</p>' if editing and e.get('filename') else ''}
-  <button>{'Save Changes' if editing else 'Add Profile'}</button> {'<a class="btn" href="/employees">Cancel</a>' if editing else ''}</form></section><section class='panel'><h3>Profiles</h3><div class='table-wrap'><table><thead><tr><th>Name</th><th>Staff ID</th><th>Department</th><th>Position</th><th>CIDB No.</th><th>CIDB expiry</th><th>Status</th><th>Actions / Attachment</th></tr></thead><tbody>{tr}</tbody></table></div></section>"""
+  <button>{'Save Changes' if editing else 'Add Profile'}</button> {'<a class="btn" href="/employees">Cancel</a>' if editing else ''}</form></section><section class='panel'><h3>Profiles</h3><div class='table-wrap'><table><thead><tr><th>Name</th><th>Staff ID</th><th>Department</th><th>Position</th><th>CIDB No.</th><th>CIDB expiry</th><th>Status</th><th>Action</th></tr></thead><tbody>{tr}</tbody></table></div></section>"""
   return page(content)
 
 
@@ -2498,14 +3080,36 @@ def actions():
   finally: conn.close()
   e = editing or {}; field = lambda name: escape(str(e.get(name) or ""))
   opts = lambda name, values, default: "".join(f"<option {'selected' if e.get(name, default)==v else ''}>{v}</option>" for v in values)
-  tr = "".join(f"<tr><td>{escape(str(r['title'] or ''))}</td><td>{escape(str(r['source_type'] or ''))}</td><td>{escape(str(r['location'] or '-'))}</td><td>{escape(str(r['severity'] or ''))}</td><td>{escape(str(r['assigned_to'] or '-'))}</td><td>{escape(str(r['due_date'] or '-'))}</td><td>{escape(str(r['status'] or ''))}</td><td>{('<a target=\'_blank\' href=\'/uploads/'+quote(str(r['filename']),safe='')+'\'>View file</a> · ') if r.get('filename') else ''}<a class='btn btn-sm' href='/actions?edit={r['id']}'>Edit</a> <form method='post' style='display:inline' onsubmit=\"return confirm('Delete this action?')\"><input type='hidden' name='action' value='delete'><input type='hidden' name='action_id' value='{r['id']}'><button class='btn btn-danger btn-sm'>Delete</button></form></td></tr>" for r in rows) or "<tr><td colspan='8'>No corrective actions yet.</td></tr>"
+  
+  tr_list = []
+  for r in rows:
+    menu_id = f"action_menu_{r['id']}"
+    menu_items = f"""
+        <a href='/actions?edit={r['id']}'>
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
+        </a>
+        <form method='post' onsubmit="return confirm('Delete this action?')" style="margin:0;">
+            <input type='hidden' name='action' value='delete'>
+            <input type='hidden' name='action_id' value='{r['id']}'>
+            <button type="submit" class="text-danger">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+            </button>
+        </form>
+    """
+    actions_td = action_menu_html(menu_id, menu_items)
+    file_view = f"<a target='_blank' href='/uploads/{quote(str(r['filename']), safe='')}'>View file</a><br>" if r.get('filename') else ''
+    
+    tr_list.append(f"<tr><td>{escape(str(r['title'] or ''))}</td><td>{escape(str(r['source_type'] or ''))}</td><td>{escape(str(r['location'] or '-'))}</td><td>{escape(str(r['severity'] or ''))}</td><td>{escape(str(r['assigned_to'] or '-'))}</td><td>{escape(str(r['due_date'] or '-'))}</td><td>{escape(str(r['status'] or ''))}</td><td>{file_view}{actions_td}</td></tr>")
+  
+  tr = "".join(tr_list) or "<tr><td colspan='8'>No corrective actions yet.</td></tr>"
+
   content = f"""<h2>Corrective Actions & Follow-up</h2><section class='panel'><h3>{'Edit corrective action' if editing else 'Create action'}</h3><form method='post' enctype='multipart/form-data'><input type='hidden' name='action' value="{'edit' if editing else 'add'}"><input type='hidden' name='action_id' value="{e.get('id','') if editing else ''}">
   <label>Action title</label><input name='title' required maxlength='180' value='{field('title')}'><label>Description</label><textarea name='description' rows='3'>{field('description')}</textarea>
   <label>Source</label><select name='source_type'>{opts('source_type',['Incident','Inspection','Audit','General'],'General')}</select><label>Location / site</label><input name='location' value='{field('location')}'><label>Severity</label><select name='severity'>{opts('severity',['Low','Medium','High','Critical'],'Medium')}</select>
   <label>Person responsible</label><input name='assigned_to' value='{field('assigned_to')}'><label>Due date</label><input type='date' name='due_date' value='{field('due_date')}'><label>Status</label><select name='status'>{opts('status',['Open','In Progress','Resolved','Closed'],'Open')}</select><label>Resolution notes</label><textarea name='resolution_notes' rows='2'>{field('resolution_notes')}</textarea>
   <label>Attach Certificate / File (Optional)<br><span style="font-size: 12px; font-weight: normal; color: #7a8c83;">Supported formats: PDF, JPG, PNG</span></label>
   <input type="file" name="attachment" accept=".png, .jpg, .jpeg, .pdf">
-  <button>{'Save Changes' if editing else 'Save Action'}</button> {'<a class="btn" href="/actions">Cancel</a>' if editing else ''}</form></section><section class='panel'><h3>Corrective Actions</h3><div class='table-wrap'><table><thead><tr><th>Title</th><th>Source</th><th>Location</th><th>Severity</th><th>Assigned To</th><th>Due Date</th><th>Status</th><th>Actions / Attachment</th></tr></thead><tbody>{tr}</tbody></table></div></section>"""
+  <button>{'Save Changes' if editing else 'Save Action'}</button> {'<a class="btn" href="/actions">Cancel</a>' if editing else ''}</form></section><section class='panel'><h3>Corrective Actions</h3><div class='table-wrap'><table><thead><tr><th>Title</th><th>Source</th><th>Location</th><th>Severity</th><th>Assigned To</th><th>Due Date</th><th>Status</th><th>Action</th></tr></thead><tbody>{tr}</tbody></table></div></section>"""
   return page(content)
 
 
@@ -2562,12 +3166,34 @@ def inspections():
   finally: conn.close()
   e = editing or {}; field = lambda name: escape(str(e.get(name) or ""))
   opts = lambda name, values, default: "".join(f"<option {'selected' if e.get(name, default)==v else ''}>{v}</option>" for v in values)
-  tr = "".join(f"<tr><td>{escape(str(r['inspection_date'] or ''))}</td><td>{escape(str(r['site_name'] or ''))}</td><td>{escape(str(r['inspector'] or ''))}</td><td>{escape(str(r['checklist_item'] or ''))}</td><td>{escape(str(r['result'] or ''))}</td><td>{escape(str(r['findings'] or '-'))}</td><td>{escape(str(r['assigned_to'] or '-'))}</td><td>{escape(str(r['due_date'] or '-'))}</td><td>{escape(str(r['status'] or ''))}</td><td>{('<a target=\'_blank\' href=\'/uploads/'+quote(str(r['filename']),safe='')+'\'>View file</a> · ') if r.get('filename') else ''}<a class='btn btn-sm' href='/inspections?edit={r['id']}'>Edit</a> <form method='post' style='display:inline' onsubmit=\"return confirm('Delete this inspection?')\"><input type='hidden' name='action' value='delete'><input type='hidden' name='inspection_id' value='{r['id']}'><button class='btn btn-danger btn-sm'>Delete</button></form></td></tr>" for r in rows) or "<tr><td colspan='10'>No inspections recorded yet.</td></tr>"
+  
+  tr_list = []
+  for r in rows:
+    menu_id = f"insp_menu_{r['id']}"
+    menu_items = f"""
+        <a href='/inspections?edit={r['id']}'>
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
+        </a>
+        <form method='post' onsubmit="return confirm('Delete this inspection?')" style="margin:0;">
+            <input type='hidden' name='action' value='delete'>
+            <input type='hidden' name='inspection_id' value='{r['id']}'>
+            <button type="submit" class="text-danger">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+            </button>
+        </form>
+    """
+    actions_td = action_menu_html(menu_id, menu_items)
+    file_view = f"<a target='_blank' href='/uploads/{quote(str(r['filename']), safe='')}'>View file</a><br>" if r.get('filename') else ''
+    
+    tr_list.append(f"<tr><td>{escape(str(r['inspection_date'] or ''))}</td><td>{escape(str(r['site_name'] or ''))}</td><td>{escape(str(r['inspector'] or ''))}</td><td>{escape(str(r['checklist_item'] or ''))}</td><td>{escape(str(r['result'] or ''))}</td><td>{escape(str(r['findings'] or '-'))}</td><td>{escape(str(r['assigned_to'] or '-'))}</td><td>{escape(str(r['due_date'] or '-'))}</td><td>{escape(str(r['status'] or ''))}</td><td>{file_view}{actions_td}</td></tr>")
+  
+  tr = "".join(tr_list) or "<tr><td colspan='10'>No inspections recorded yet.</td></tr>"
+
   content = f"""<h2>Site Inspection Checklist</h2><section class='panel'><h3>{'Edit inspection' if editing else 'Record inspection item'}</h3><form method='post' enctype='multipart/form-data'><input type='hidden' name='action' value="{'edit' if editing else 'add'}"><input type='hidden' name='inspection_id' value="{e.get('id','') if editing else ''}">
   <label>Site / project</label><input name='site_name' required value='{field('site_name')}'><label>Inspection date</label><input type='date' name='inspection_date' value='{field('inspection_date') or date.today().isoformat()}' required><label>Inspector</label><input name='inspector' required value='{field('inspector')}'><label>Checklist item</label><input name='checklist_item' required value='{field('checklist_item')}'><label>Result</label><select name='result'>{opts('result',['Pass','Fail','Observation','Not Applicable'],'Pass')}</select><label>Findings / notes</label><textarea name='findings' rows='3'>{field('findings')}</textarea><label>Corrective action required</label><textarea name='corrective_action' rows='2'>{field('corrective_action')}</textarea><label>Assigned to</label><input name='assigned_to' value='{field('assigned_to')}'><label>Due date</label><input type='date' name='due_date' value='{field('due_date')}'><label>Status</label><select name='status'>{opts('status',['Open','In Progress','Closed'],'Open')}</select>
   <label>Attach Certificate / File (Optional)<br><span style="font-size: 12px; font-weight: normal; color: #7a8c83;">Supported formats: PDF, JPG, PNG</span></label>
   <input type="file" name="attachment" accept=".png, .jpg, .jpeg, .pdf">
-  <button>{'Save Changes' if editing else 'Save Inspection'}</button> {'<a class="btn" href="/inspections">Cancel</a>' if editing else ''}</form></section><section class='panel'><h3>Inspection register</h3><div class='table-wrap'><table><thead><tr><th>Date</th><th>Site</th><th>Inspector</th><th>Checklist item</th><th>Result</th><th>Findings</th><th>Assigned to</th><th>Due date</th><th>Status</th><th>Actions / Attachment</th></tr></thead><tbody>{tr}</tbody></table></div></section>"""
+  <button>{'Save Changes' if editing else 'Save Inspection'}</button> {'<a class="btn" href="/inspections">Cancel</a>' if editing else ''}</form></section><section class='panel'><h3>Inspection register</h3><div class='table-wrap'><table><thead><tr><th>Date</th><th>Site</th><th>Inspector</th><th>Checklist item</th><th>Result</th><th>Findings</th><th>Assigned to</th><th>Due date</th><th>Status</th><th>Action</th></tr></thead><tbody>{tr}</tbody></table></div></section>"""
   return page(content)
 
 
