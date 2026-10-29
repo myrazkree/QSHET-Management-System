@@ -1,6 +1,9 @@
-from datetime import date
+from datetime import date, datetime, timedelta
 import os
+import secrets
+import uuid
 from pathlib import Path
+from urllib.parse import quote
 import re
 from flask import (
     Flask,
@@ -15,9 +18,11 @@ from flask import (
 import pymysql
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
+from markupsafe import escape
 
 app = Flask(__name__)
-app.secret_key = "qshe_super_secret_key_change_in_production"
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "CHANGE_THIS_SECRET_BEFORE_DEPLOYMENT_" + secrets.token_hex(16))
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB maximum upload
 
 # ---------- UPLOAD CONFIGURATION ----------
 UPLOAD_FOLDER = Path(__file__).with_name("uploads")
@@ -56,12 +61,14 @@ def validate_password(password):
 
 # ---------- DATABASE CONFIGURATION ----------
 DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "",  # Default XAMPP MySQL has no password
-    "database": "qshet_db",
+    "host": os.environ.get("DB_HOST", "localhost"),
+    "user": os.environ.get("DB_USER", "root"),
+    "password": os.environ.get("DB_PASSWORD", ""),
+    "database": os.environ.get("DB_NAME", "qshet_db"),
+    "port": int(os.environ.get("DB_PORT", "3306")),
     "charset": "utf8mb4",
     "cursorclass": pymysql.cursors.DictCursor,
+    "connect_timeout": 10,
 }
 
 
@@ -79,7 +86,8 @@ def init_db():
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     username VARCHAR(100) NOT NULL UNIQUE,
                     password VARCHAR(255) NOT NULL,
-                    role VARCHAR(20) NOT NULL
+                    role VARCHAR(20) NOT NULL,
+                    must_change_password TINYINT(1) NOT NULL DEFAULT 0
                 ) ENGINE=InnoDB;
             """)
 
@@ -130,25 +138,129 @@ def init_db():
                 ) ENGINE=InnoDB;
             """)
 
+      # Employees table
+      cursor.execute("""
+        CREATE TABLE IF NOT EXISTS employees (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NULL UNIQUE,
+          full_name VARCHAR(150) NOT NULL,
+          staff_id VARCHAR(80) NULL,
+          department VARCHAR(100) NULL,
+          position VARCHAR(100) NULL,
+          cidb_number VARCHAR(100) NULL,
+          cidb_expiry DATE NULL,
+          employment_status VARCHAR(30) NOT NULL DEFAULT 'Active',
+          filename VARCHAR(255) NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT fk_employee_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB;
+      """)
+
+      # Corrective actions table
+      cursor.execute("""
+        CREATE TABLE IF NOT EXISTS corrective_actions (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          title VARCHAR(180) NOT NULL,
+          description TEXT,
+          source_type VARCHAR(50) NOT NULL DEFAULT 'General',
+          source_id INT NULL,
+          location VARCHAR(180) NULL,
+          severity VARCHAR(30) NOT NULL DEFAULT 'Medium',
+          assigned_to VARCHAR(150) NULL,
+          due_date DATE NULL,
+          status VARCHAR(30) NOT NULL DEFAULT 'Open',
+          resolution_notes TEXT,
+          filename VARCHAR(255) NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          resolved_at DATETIME NULL
+        ) ENGINE=InnoDB;
+      """)
+
+      # Inspections table
+      cursor.execute("""
+        CREATE TABLE IF NOT EXISTS inspections (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          site_name VARCHAR(180) NOT NULL,
+          inspection_date DATE NOT NULL,
+          inspector VARCHAR(150) NOT NULL,
+          checklist_item VARCHAR(180) NOT NULL,
+          result VARCHAR(30) NOT NULL DEFAULT 'Pass',
+          findings TEXT,
+          corrective_action TEXT,
+          assigned_to VARCHAR(150) NULL,
+          due_date DATE NULL,
+          status VARCHAR(30) NOT NULL DEFAULT 'Open',
+          filename VARCHAR(255) NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB;
+      """)
+
+      # Audit logs table
+      cursor.execute("""
+        CREATE TABLE IF NOT EXISTS audit_logs (
+          id BIGINT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NULL,
+          username VARCHAR(100) NULL,
+          action VARCHAR(100) NOT NULL,
+          details TEXT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_audit_created (created_at)
+        ) ENGINE=InnoDB;
+      """)
+
       # Auto-patch existing tables if filename column is missing
-      for tbl in ["safety_reports", "documents", "training"]:
+      for tbl in ["safety_reports", "documents", "training", "employees", "corrective_actions", "inspections"]:
         cursor.execute(f"SHOW COLUMNS FROM {tbl} LIKE 'filename'")
         if not cursor.fetchone():
-          cursor.execute(f"ALTER TABLE {tbl} ADD COLUMN filename VARCHAR(255)")
+          cursor.execute(f"ALTER TABLE {tbl} ADD COLUMN filename VARCHAR(255) NULL")
 
-      # Seed default admin if no users exist
+      # Migrate existing installations for must_change_password
+      cursor.execute("SHOW COLUMNS FROM users LIKE 'must_change_password'")
+      if not cursor.fetchone():
+        cursor.execute("ALTER TABLE users ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 0")
+
+      # Seed a first admin only when the users table is empty.
       cursor.execute("SELECT COUNT(*) AS cnt FROM users")
       if cursor.fetchone()["cnt"] == 0:
-        admin_pass = generate_password_hash("Admin@123")
+        admin_pass = generate_password_hash(os.environ.get("INITIAL_ADMIN_PASSWORD", "Admin@123"))
         cursor.execute(
-            "INSERT INTO users (username, password, role) VALUES (%s, %s,"
-            " 'admin')",
-            ("admin", admin_pass),
+            "INSERT INTO users (username, password, role, must_change_password) VALUES (%s, %s, 'admin', 1)",
+            (os.environ.get("INITIAL_ADMIN_USERNAME", "admin"), admin_pass),
         )
 
     conn.commit()
   finally:
     conn.close()
+
+
+def log_action(action, details=""):
+  """Write a simple audit entry without interrupting the user's main action."""
+  try:
+    conn = get_db()
+    try:
+      with conn.cursor() as db:
+        db.execute(
+          "INSERT INTO audit_logs (user_id, username, action, details) VALUES (%s, %s, %s, %s)",
+          (session.get("user_id"), session.get("username"), action, str(details)[:4000]),
+        )
+      conn.commit()
+    finally:
+      conn.close()
+  except Exception:
+    app.logger.exception("Could not write audit log")
+
+
+def save_upload(file, prefix="file"):
+  """Validate extension and assign a unique, non-user-controlled storage name."""
+  if not file or not file.filename:
+    return None
+  if not allowed_file(file.filename):
+    raise ValueError("Only PDF, JPG, JPEG and PNG files are allowed.")
+  original = secure_filename(file.filename)
+  suffix = Path(original).suffix.lower()
+  filename = f"{prefix}_{uuid.uuid4().hex}{suffix}"
+  file.save(app.config["UPLOAD_FOLDER"] / filename)
+  return filename
 
 
 # ---------- WEBSITE TEMPLATE ----------
@@ -289,7 +401,7 @@ footer strong { color: #ffd166; }
             Logged in as: <strong>{{ session.get('username') }}</strong> ({{ session.get('role').capitalize() }})<br>
             <a href="/logout">Logout</a>
         {% else %}
-            <a href="/login">Login</a> | <a href="/register">Register</a>
+            <a href="/login">Login</a>
         {% endif %}
     </div>
 </header>
@@ -301,6 +413,10 @@ footer strong { color: #ffd166; }
         <a href="/training">Training & Compliance</a>
         <a href="/manage-cidb">All Protege CIDB Records</a>
         <a href="/manage-users">Manage Users & Passwords</a>
+        <a href="/employees">Employee Profiles</a>
+        <a href="/actions">Corrective Actions</a>
+        <a href="/inspections">Site Inspections</a>
+        <a href="/reports">Reports & Audit Log</a>
     {% elif session.get('role') == 'protege' %}
         <a href="/my-cidb">My CIDB Documents</a>
     {% endif %}
@@ -323,7 +439,7 @@ footer strong { color: #ffd166; }
 <!-- Popup Detail Modal -->
 <div id="detailModal" class="modal-overlay" onclick="closeModal(event)">
     <div class="modal-content" onclick="event.stopPropagation()">
-        <span class="modal-close" onclick="closeModalDirect()">&times;</span>
+        <span class="modal-close" onclick="closeDetailModal()">&times;</span>
         <h3 style="margin-top:0; color:#183b35;" id="modalTitle">Report Details</h3>
         <div id="modalBody"></div>
     </div>
@@ -478,7 +594,7 @@ function checkPasswordStrength(password) {
     let score = 0;
     if (password.length >= 8) score++;
     if (/[A-Za-z]/.test(password)) score++;
-    if (/\d/.test(password)) score++;
+    if (/\\d/.test(password)) score++;
     if (/[^A-Za-z0-9]/.test(password)) score++;
 
     if (score <= 2) {
@@ -514,7 +630,7 @@ function closeModal(event) {
         document.getElementById('detailModal').style.display = 'none';
     }
 }
-function closeModalDirect() {
+function closeDetailModal() {
     document.getElementById('detailModal').style.display = 'none';
 }
 
@@ -584,9 +700,14 @@ def login():
       conn.close()
 
     if user and check_password_hash(user["password"], password):
+      session.clear()
       session["user_id"] = user["id"]
       session["username"] = user["username"]
       session["role"] = user["role"]
+      session["must_change_password"] = bool(user.get("must_change_password", 0))
+      log_action("login", "Successful login")
+      if session["must_change_password"]:
+        return redirect(url_for("change_password"))
       return redirect(url_for("dashboard"))
     else:
       flash("Invalid username or password")
@@ -609,84 +730,62 @@ def login():
         <button type="submit">Login</button>
     </form>
     <p class="muted" style="margin-top: 15px; font-size: 13px;">
-        Don't have an account? <a href="/register">Register here</a>
+        Accounts are created by the QSHET administrator. Contact the administrator if you need access.
     </p>
     </section>
     """
   return page(content)
 
 
-@app.route("/register", methods=["GET", "POST"])
-def register():
+@app.route("/change-password", methods=["GET", "POST"])
+def change_password():
+  if "user_id" not in session:
+    return redirect(url_for("login"))
   if request.method == "POST":
-    username = request.form.get("username", "").strip()
-    password = request.form.get("password", "")
-    role = request.form.get("role", "protege")
-
-    if not username or not password:
-      flash("Username and password are required.")
-      return redirect(url_for("register"))
-
-    is_valid, message = validate_password(password)
+    current_password = request.form.get("current_password", "")
+    new_password = request.form.get("new_password", "")
+    confirm_password = request.form.get("confirm_password", "")
+    is_valid, message = validate_password(new_password)
     if not is_valid:
       flash(message)
-      return redirect(url_for("register"))
-
-    hashed_password = generate_password_hash(password)
-
-    conn = get_db()
-    try:
-      with conn.cursor() as db:
-        db.execute("SELECT id FROM users WHERE username = %s", (username,))
-        if db.fetchone():
-          flash("Username already taken. Please choose another username.")
-          return redirect(url_for("register"))
-
-        db.execute(
-            "INSERT INTO users (username, password, role) VALUES (%s, %s, %s)",
-            (username, hashed_password, role),
-        )
-      conn.commit()
-      flash("Registration successful! You can now log in with your credentials.")
-      return redirect(url_for("login"))
-    except Exception as e:
-      flash(f"Error during registration: {e}")
-    finally:
-      conn.close()
-
+    elif new_password != confirm_password:
+      flash("The new passwords do not match.")
+    else:
+      conn = get_db()
+      try:
+        with conn.cursor() as db:
+          db.execute("SELECT password FROM users WHERE id = %s", (session["user_id"],))
+          user = db.fetchone()
+          if not user or not check_password_hash(user["password"], current_password):
+            flash("Current password is incorrect.")
+          else:
+            db.execute("UPDATE users SET password = %s, must_change_password = 0 WHERE id = %s", (generate_password_hash(new_password), session["user_id"]))
+            conn.commit()
+            session["must_change_password"] = False
+            log_action("change_password", "User changed password")
+            flash("Password changed successfully.")
+            return redirect(url_for("dashboard"))
+      finally:
+        conn.close()
   content = """
-    <h2>Register New Account</h2>
-    <section class="panel" style="max-width: 400px; margin: auto;">
-    <form method="post">
-        <label>Username</label>
-        <input name="username" required maxlength="100">
-        
-        <label>Password</label>
-        <div class="password-container">
-            <input type="password" id="reg_pass" name="password" required oninput="checkPasswordStrength(this.value)">
-            <button type="button" class="toggle-eye-btn" onclick="togglePasswordVisibility('reg_pass', this)">
-                <svg viewBox="0 0 24 24"><use href="#icon-eye-open"></use></svg>
-            </button>
-        </div>
-        <div id="strength-indicator" class="strength-meter"></div>
-        <p class="muted" style="font-size: 12px; margin-top: 4px;">
-            Must be at least 8 characters long and include letters, numbers, and a symbol (e.g., !, @, #, *, ?).
-        </p>
-
-        <label>Role</label>
-        <select name="role" required>
-            <option value="protege">Protege</option>
-            <option value="admin">Admin</option>
-        </select>
-
-        <button type="submit">Register</button>
-    </form>
-    <p class="muted" style="margin-top: 15px; font-size: 13px;">
-        Already have an account? <a href="/login">Login here</a>
-    </p>
+    <h2>Change Password</h2>
+    <section class="panel" style="max-width:450px;margin:auto;">
+      <p>Enter your current password, then choose a new password containing at least 8 characters, a letter, a number and a symbol.</p>
+      <form method="post">
+        <label>Current password</label><input type="password" name="current_password" required>
+        <label>New password</label><input type="password" name="new_password" minlength="8" required>
+        <label>Confirm new password</label><input type="password" name="confirm_password" minlength="8" required>
+        <button type="submit">Change password</button>
+      </form>
     </section>
-    """
+  """
   return page(content)
+
+
+@app.before_request
+def require_password_change_first():
+  if session.get("must_change_password") and request.endpoint not in {"change_password", "logout", "static"}:
+    return redirect(url_for("change_password"))
 
 
 @app.route("/logout")
@@ -702,6 +801,25 @@ def logout():
 def dashboard():
   if "user_id" not in session:
     return redirect(url_for("login"))
+
+  # Protégés see only their own document summary, not company-wide QSHET records.
+  if session.get("role") != "admin":
+    conn = get_db()
+    try:
+      with conn.cursor() as db:
+        db.execute("SELECT COUNT(*) AS cnt FROM cidb_uploads WHERE user_id = %s", (session["user_id"],))
+        my_docs = db.fetchone()["cnt"]
+    finally:
+      conn.close()
+    content = f"""
+      <h2>Protégé Dashboard</h2>
+      <p class="muted">Welcome, {session.get('username')}.</p>
+      <div class="cards">
+        <a href="/my-cidb" class="card">My CIDB & Protégé Documents<div class="number">{my_docs}</div></a>
+      </div>
+      <section class="panel"><h3>Your account</h3><p>Use the My CIDB page to upload and manage your own documents. Contact the QSHET administrator if you need help with your account.</p><a class="btn" href="/change-password">Change password</a></section>
+    """
+    return page(content)
 
   conn = get_db()
   try:
@@ -720,6 +838,11 @@ def dashboard():
       db.execute("SELECT COUNT(*) AS cnt FROM training")
       courses = db.fetchone()["cnt"]
 
+      db.execute("SELECT expiry_date AS due_date FROM training WHERE expiry_date IS NOT NULL AND expiry_date <> '' UNION ALL SELECT review_date AS due_date FROM documents WHERE review_date IS NOT NULL AND review_date <> '' UNION ALL SELECT CAST(cidb_expiry AS CHAR) AS due_date FROM employees WHERE cidb_expiry IS NOT NULL")
+      due_rows = db.fetchall()
+      db.execute("SELECT COUNT(*) AS cnt FROM corrective_actions WHERE status NOT IN ('Resolved','Closed')")
+      open_actions_count = db.fetchone()["cnt"]
+
       db.execute("""
                 SELECT id, title, category, description, filename, status, created_at
                 FROM safety_reports ORDER BY id DESC LIMIT 5
@@ -727,6 +850,19 @@ def dashboard():
       recent = db.fetchall()
   finally:
     conn.close()
+
+  today = date.today()
+  expired_count = 0
+  expiring_count = 0
+  for due_row in due_rows:
+    try:
+      due = date.fromisoformat(str(due_row["due_date"])[:10])
+      if due < today:
+        expired_count += 1
+      elif due <= today + timedelta(days=30):
+        expiring_count += 1
+    except (ValueError, TypeError):
+      continue
 
   is_admin = session.get("role") == "admin"
   safety_url = "/safety" if is_admin else "#"
@@ -768,6 +904,12 @@ def dashboard():
             <div class="number">{documents}</div></a>
         <a href="{training_url}" class="card">Training Records
             <div class="number">{courses}</div></a>
+        <a href="/reports" class="card">Expired dates
+            <div class="number">{expired_count}</div></a>
+        <a href="/reports" class="card">Due within 30 days
+            <div class="number">{expiring_count}</div></a>
+        <a href="/actions" class="card">Open corrective actions
+            <div class="number">{open_actions_count}</div></a>
     </div>
     <section class="panel">
         <h3>Recent Safety Reports</h3>
@@ -1510,10 +1652,13 @@ def manage_users():
         if action == "add":
           new_username = request.form.get("new_username", "").strip()
           new_password = request.form.get("new_password", "")
-          new_role = request.form.get("new_role", "protege")
+          full_name = request.form.get("new_full_name", "").strip()
+          new_role = request.form.get("new_role", "protege").strip().lower()
 
-          if not new_username or not new_password:
-            flash("Username and password are required.")
+          if new_role not in ("admin", "protege"):
+            flash("Invalid role selected.")
+          elif not new_username or not new_password:
+            flash("Username and temporary password are required.")
           else:
             is_valid, message = validate_password(new_password)
             if not is_valid:
@@ -1525,11 +1670,17 @@ def manage_users():
               else:
                 hashed_pw = generate_password_hash(new_password)
                 db.execute(
-                    "INSERT INTO users (username, password, role) VALUES (%s, %s, %s)",
+                    "INSERT INTO users (username, password, role, must_change_password) VALUES (%s, %s, %s, 1)",
                     (new_username, hashed_pw, new_role),
                 )
+                new_user_id = db.lastrowid
+                if full_name:
+                  position = "Administrator" if new_role == "admin" else "Protégé"
+                  db.execute("INSERT INTO employees (user_id, full_name, position) VALUES (%s, %s, %s)", (new_user_id, full_name, position))
                 conn.commit()
-                flash("New user added successfully!")
+                log_action("create_user_account", f"Created {new_role} account: {new_username}")
+                role_label = "administrator" if new_role == "admin" else "Protégé"
+                flash(f"{role_label} account created. Share the temporary password securely; the user must change it on first login.")
 
         elif action == "delete":
           user_id = request.form.get("user_id")
@@ -1571,23 +1722,20 @@ def manage_users():
   # Add new person form row at the top
   add_row_html = f"""
         <tr style="background: #f8faf9;">
-            <form method="post">
-                <input type="hidden" name="action" value="add">
-                <td>#</td>
-                <td><input type="text" name="new_username" placeholder="New Username" required style="padding:8px; margin:0; width:100%;"></td>
-                <td>
-                    <select name="new_role" required style="padding:8px; margin:0; width:100%;">
-                        <option value="protege">Protege</option>
+            <td>#</td>
+            <td colspan="3">
+                <form method="post" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px; align-items:center;">
+                    <input type="hidden" name="action" value="add">
+                    <input type="text" name="new_username" placeholder="New Username" required maxlength="100" style="padding:8px; margin:0; width:100%; box-sizing:border-box;">
+                    <select name="new_role" required style="padding:8px; margin:0; width:100%; box-sizing:border-box;">
+                        <option value="protege">Protégé</option>
                         <option value="admin">Admin</option>
                     </select>
-                </td>
-                <td>
-                    <div style="display:flex; gap:8px;">
-                        <input type="password" name="new_password" placeholder="Password (Min 8, #, @)" required style="padding:8px; margin:0; flex:1;">
-                        <button type="submit" class="btn btn-sm" style="margin:0; background:#23594b; white-space:nowrap;">Save / Add</button>
-                    </div>
-                </td>
-            </form>
+                    <input type="text" name="new_full_name" placeholder="Full name (optional)" style="padding:8px; margin:0; width:100%; box-sizing:border-box;">
+                    <input type="password" name="new_password" placeholder="Temporary password (min 8, letter, number, symbol)" required style="padding:8px; margin:0; width:100%; box-sizing:border-box;">
+                    <button type="submit" class="btn btn-sm" style="margin:0; background:#23594b; white-space:nowrap;">Create Account</button>
+                </form>
+            </td>
         </tr>
   """
 
@@ -1612,7 +1760,7 @@ def manage_users():
 
   content = f"""
     <h2>User Accounts & Password Management</h2>
-    <p class="muted">Add new users or click update to edit details, role, or reset passwords.</p>
+    <p class="muted">Only administrators can create accounts. Choose Admin or Protégé; every new account must change its temporary password at first login. Administrators can reset other users’ passwords from Update.</p>
     <section class="panel">
         <h3>Registered Users List</h3>
         {user_table_html}
@@ -1644,16 +1792,14 @@ def edit_user(user_id):
 
   if request.method == "POST":
     updated_username = request.form.get("username", "").strip()
-    updated_role = request.form.get("role", "")
-    new_password = request.form.get("new_password", "").strip()
+    new_password = request.form.get("new_password", "")
 
-    if not updated_username or not updated_role:
-      flash("Username and role are required.")
+    if not updated_username:
+      flash("Username is required.")
     else:
       conn = get_db()
       try:
         with conn.cursor() as db:
-          # Check if username is taken by another account
           db.execute("SELECT id FROM users WHERE username = %s AND id != %s", (updated_username, user_id))
           if db.fetchone():
             flash("Username already taken by another account.")
@@ -1665,13 +1811,13 @@ def edit_user(user_id):
                 return redirect(url_for("edit_user", user_id=user_id))
               hashed_pw = generate_password_hash(new_password)
               db.execute(
-                  "UPDATE users SET username = %s, role = %s, password = %s WHERE id = %s",
-                  (updated_username, updated_role, hashed_pw, user_id),
+                  "UPDATE users SET username = %s, password = %s, must_change_password = 1 WHERE id = %s",
+                  (updated_username, hashed_pw, user_id),
               )
             else:
               db.execute(
-                  "UPDATE users SET username = %s, role = %s WHERE id = %s",
-                  (updated_username, updated_role, user_id),
+                  "UPDATE users SET username = %s WHERE id = %s",
+                  (updated_username, user_id),
               )
             conn.commit()
             flash("User updated successfully.")
@@ -1686,13 +1832,9 @@ def edit_user(user_id):
         <label>Username</label>
         <input name="username" value="{user['username']}" required maxlength="100">
 
-        <label>Role</label>
-        <select name="role" required>
-            <option value="protege" {'SELECTED' if user['role']=='protege' else ''}>Protege</option>
-            <option value="admin" {'SELECTED' if user['role']=='admin' else ''}>Admin</option>
-        </select>
+        <p><strong>Role:</strong> {user['role'].capitalize()} (role cannot be changed here)</p>
 
-        <label>New Password (Optional)</label>
+        <label>Reset Password (Optional)</label>
         <div class="password-container">
             <input type="password" id="edit_pass" name="new_password" placeholder="Leave blank to keep current password">
             <button type="button" class="toggle-eye-btn" onclick="togglePasswordVisibility('edit_pass', this)">
@@ -1712,11 +1854,263 @@ def edit_user(user_id):
   """
   return page(content)
 
+# ---------- ADDITIONAL QSHET MANAGEMENT FEATURES ----------
+
+@app.route("/employees", methods=["GET", "POST"])
+def employees():
+  if session.get("role") != "admin":
+    flash("Access denied. Admin only.")
+    return redirect(url_for("dashboard"))
+  conn = get_db()
+  editing = None
+  try:
+    with conn.cursor() as db:
+      if request.method == "POST":
+        action = request.form.get("action", "add")
+        if action == "delete":
+          employee_id = request.form.get("employee_id", type=int)
+          db.execute("SELECT filename FROM employees WHERE id=%s", (employee_id,))
+          old = db.fetchone()
+          if old:
+            db.execute("DELETE FROM employees WHERE id=%s", (employee_id,))
+            conn.commit()
+            if old.get("filename"):
+              try: (app.config["UPLOAD_FOLDER"] / old["filename"]).unlink(missing_ok=True)
+              except OSError: app.logger.warning("Could not remove employee attachment")
+            log_action("delete_employee", str(employee_id))
+            flash("Employee profile deleted.")
+          return redirect(url_for("employees"))
+        employee_id = request.form.get("employee_id", type=int) if action == "edit" else None
+        full_name = request.form.get("full_name", "").strip()
+        if not full_name:
+          flash("Full name is required.")
+        else:
+          staff_id = request.form.get("staff_id", "").strip() or None
+          department = request.form.get("department", "").strip() or None
+          position = request.form.get("position", "").strip() or None
+          cidb_number = request.form.get("cidb_number", "").strip() or None
+          cidb_expiry = request.form.get("cidb_expiry", "").strip() or None
+          status = request.form.get("employment_status", "Active")
+          if status not in {"Active", "Inactive", "Completed"}: status = "Active"
+          try:
+            new_file = save_upload(request.files.get("attachment"), "employee")
+          except ValueError as exc:
+            flash(str(exc)); return redirect(url_for("employees", edit=employee_id) if employee_id else url_for("employees"))
+          if employee_id:
+            db.execute("SELECT filename FROM employees WHERE id=%s", (employee_id,)); old = db.fetchone()
+            if not old:
+              flash("Profile not found."); return redirect(url_for("employees"))
+            filename = new_file or old.get("filename")
+            db.execute("UPDATE employees SET full_name=%s, staff_id=%s, department=%s, position=%s, cidb_number=%s, cidb_expiry=%s, employment_status=%s, filename=%s WHERE id=%s", (full_name, staff_id, department, position, cidb_number, cidb_expiry, status, filename, employee_id))
+            conn.commit()
+            if new_file and old.get("filename"):
+              try: (app.config["UPLOAD_FOLDER"] / old["filename"]).unlink(missing_ok=True)
+              except OSError: pass
+            log_action("edit_employee", full_name); flash("Profile updated successfully.")
+          else:
+            db.execute("INSERT INTO employees (full_name, staff_id, department, position, cidb_number, cidb_expiry, employment_status, filename) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", (full_name, staff_id, department, position, cidb_number, cidb_expiry, status, new_file))
+            conn.commit(); log_action("create_employee", full_name); flash("Employee profile created.")
+          return redirect(url_for("employees"))
+      edit_id = request.args.get("edit", type=int)
+      if edit_id:
+        db.execute("SELECT * FROM employees WHERE id=%s", (edit_id,)); editing = db.fetchone()
+      db.execute("SELECT * FROM employees ORDER BY full_name"); rows = db.fetchall()
+  finally:
+    conn.close()
+  e = editing or {}
+  field = lambda name: escape(str(e.get(name) or ""))
+  selected = lambda val: "selected" if e.get("employment_status", "Active") == val else ""
+  tr = "".join(
+    f"<tr><td>{escape(str(r['full_name'] or ''))}</td><td>{escape(str(r['staff_id'] or '-'))}</td><td>{escape(str(r['department'] or '-'))}</td><td>{escape(str(r['position'] or '-'))}</td><td>{escape(str(r['cidb_number'] or '-'))}</td><td>{escape(str(r['cidb_expiry'] or '-'))}</td><td>{escape(str(r['employment_status'] or ''))}</td><td>{('<a target=\'_blank\' href=\'/uploads/' + quote(str(r['filename']), safe='') + '\'>View file</a> · ') if r.get('filename') else ''}<a class='btn btn-sm' href='/employees?edit={r['id']}'>Edit</a> <form method='post' style='display:inline' onsubmit=\"return confirm('Delete this profile?')\"><input type='hidden' name='action' value='delete'><input type='hidden' name='employee_id' value='{r['id']}'><button class='btn btn-danger btn-sm'>Delete</button></form></td></tr>" for r in rows
+  ) or "<tr><td colspan='8'>No profiles yet.</td></tr>"
+  content = f"""<h2>Employee & Protégé Profiles</h2><section class='panel'><h3>{'Edit profile' if editing else 'Add profile'}</h3><form method='post' enctype='multipart/form-data'>
+  <input type='hidden' name='action' value="{'edit' if editing else 'add'}"><input type='hidden' name='employee_id' value='{e.get('id','') if editing else ''}'>
+  <label>Full name</label><input name='full_name' required maxlength='150' value='{field('full_name')}'>
+  <label>Staff ID</label><input name='staff_id' maxlength='80' value='{field('staff_id')}'>
+  <label>Department</label><input name='department' maxlength='100' value='{field('department')}'>
+  <label>Position</label><input name='position' maxlength='100' value='{field('position')}'>
+  <label>CIDB number</label><input name='cidb_number' maxlength='100' value='{field('cidb_number')}'>
+  <label>CIDB expiry date</label><input type='date' name='cidb_expiry' value='{field('cidb_expiry')}'>
+  <label>Status</label><select name='employment_status'><option {selected('Active')}>Active</option><option {selected('Inactive')}>Inactive</option><option {selected('Completed')}>Completed</option></select>
+  <label>Attach Certificate / File (PDF, JPG, PNG)</label><input type='file' name='attachment' accept='.pdf,.jpg,.jpeg,.png'>
+  {'<p class="muted">An existing attachment will be kept if no new file is selected.</p>' if editing and e.get('filename') else ''}
+  <button>{'Save Changes' if editing else 'Add Profile'}</button> {'<a class="btn" href="/employees">Cancel</a>' if editing else ''}</form></section><section class='panel'><h3>Profiles</h3><div class='table-wrap'><table><thead><tr><th>Name</th><th>Staff ID</th><th>Department</th><th>Position</th><th>CIDB No.</th><th>CIDB expiry</th><th>Status</th><th>Actions / Attachment</th></tr></thead><tbody>{tr}</tbody></table></div></section>"""
+  return page(content)
+
+
+@app.route("/actions", methods=["GET", "POST"])
+def actions():
+  if session.get("role") != "admin":
+    flash("Access denied. Admin only.")
+    return redirect(url_for("dashboard"))
+  conn = get_db(); editing = None
+  try:
+    with conn.cursor() as db:
+      if request.method == "POST":
+        action = request.form.get("action", "add")
+        aid = request.form.get("action_id", type=int)
+        if action == "delete":
+          db.execute("SELECT filename FROM corrective_actions WHERE id=%s", (aid,)); old = db.fetchone()
+          if old:
+            db.execute("DELETE FROM corrective_actions WHERE id=%s", (aid,)); conn.commit()
+            if old.get("filename"):
+              try: (app.config["UPLOAD_FOLDER"] / old["filename"]).unlink(missing_ok=True)
+              except OSError: pass
+            log_action("delete_corrective_action", str(aid)); flash("Corrective action deleted.")
+          return redirect(url_for("actions"))
+        title = request.form.get("title", "").strip()
+        if not title:
+          flash("Action title is required.")
+        else:
+          try: new_file = save_upload(request.files.get("attachment"), "action")
+          except ValueError as exc:
+            flash(str(exc)); return redirect(url_for("actions", edit=aid) if action == "edit" else url_for("actions"))
+          description = request.form.get("description", "").strip()
+          source_type = request.form.get("source_type", "General")
+          if source_type not in {"Incident", "Inspection", "Audit", "General"}: source_type = "General"
+          severity = request.form.get("severity", "Medium")
+          if severity not in {"Low", "Medium", "High", "Critical"}: severity = "Medium"
+          due = request.form.get("due_date", "").strip() or None
+          assigned = request.form.get("assigned_to", "").strip() or None
+          location = request.form.get("location", "").strip() or None
+          if action == "edit" and aid:
+            db.execute("SELECT filename FROM corrective_actions WHERE id=%s", (aid,)); old = db.fetchone()
+            if not old: flash("Corrective action not found."); return redirect(url_for("actions"))
+            filename = new_file or old.get("filename")
+            status = request.form.get("status", "Open")
+            if status not in {"Open", "In Progress", "Resolved", "Closed"}: status = "Open"
+            notes = request.form.get("resolution_notes", "").strip()
+            db.execute("UPDATE corrective_actions SET title=%s, description=%s, source_type=%s, location=%s, severity=%s, assigned_to=%s, due_date=%s, status=%s, resolution_notes=%s, resolved_at=IF(%s IN ('Resolved','Closed'), COALESCE(resolved_at,NOW()), NULL), filename=%s WHERE id=%s", (title, description, source_type, location, severity, assigned, due, status, notes, status, filename, aid))
+            conn.commit()
+            if new_file and old.get("filename"):
+              try: (app.config["UPLOAD_FOLDER"] / old["filename"]).unlink(missing_ok=True)
+              except OSError: pass
+            log_action("edit_corrective_action", title); flash("Corrective action updated.")
+          else:
+            db.execute("INSERT INTO corrective_actions (title, description, source_type, location, severity, assigned_to, due_date, status, filename) VALUES (%s,%s,%s,%s,%s,%s,%s,'Open',%s)", (title, description, source_type, location, severity, assigned, due, new_file))
+            conn.commit(); log_action("create_corrective_action", title); flash("Corrective action added.")
+          return redirect(url_for("actions"))
+      edit_id = request.args.get("edit", type=int)
+      if edit_id: db.execute("SELECT * FROM corrective_actions WHERE id=%s", (edit_id,)); editing = db.fetchone()
+      db.execute("SELECT * FROM corrective_actions ORDER BY (status IN ('Resolved','Closed')), due_date IS NULL, due_date, id DESC"); rows = db.fetchall()
+  finally: conn.close()
+  e = editing or {}; field = lambda name: escape(str(e.get(name) or ""))
+  opts = lambda name, values, default: "".join(f"<option {'selected' if e.get(name, default)==v else ''}>{v}</option>" for v in values)
+  tr = "".join(f"<tr><td>{escape(str(r['title'] or ''))}</td><td>{escape(str(r['source_type'] or ''))}</td><td>{escape(str(r['location'] or '-'))}</td><td>{escape(str(r['severity'] or ''))}</td><td>{escape(str(r['assigned_to'] or '-'))}</td><td>{escape(str(r['due_date'] or '-'))}</td><td>{escape(str(r['status'] or ''))}</td><td>{('<a target=\'_blank\' href=\'/uploads/'+quote(str(r['filename']),safe='')+'\'>View file</a> · ') if r.get('filename') else ''}<a class='btn btn-sm' href='/actions?edit={r['id']}'>Edit</a> <form method='post' style='display:inline' onsubmit=\"return confirm('Delete this action?')\"><input type='hidden' name='action' value='delete'><input type='hidden' name='action_id' value='{r['id']}'><button class='btn btn-danger btn-sm'>Delete</button></form></td></tr>" for r in rows) or "<tr><td colspan='8'>No corrective actions yet.</td></tr>"
+  content = f"""<h2>Corrective Actions & Follow-up</h2><section class='panel'><h3>{'Edit corrective action' if editing else 'Create action'}</h3><form method='post' enctype='multipart/form-data'><input type='hidden' name='action' value="{'edit' if editing else 'add'}"><input type='hidden' name='action_id' value="{e.get('id','') if editing else ''}">
+  <label>Action title</label><input name='title' required maxlength='180' value='{field('title')}'><label>Description</label><textarea name='description' rows='3'>{field('description')}</textarea>
+  <label>Source</label><select name='source_type'>{opts('source_type',['Incident','Inspection','Audit','General'],'General')}</select><label>Location / site</label><input name='location' value='{field('location')}'><label>Severity</label><select name='severity'>{opts('severity',['Low','Medium','High','Critical'],'Medium')}</select>
+  <label>Person responsible</label><input name='assigned_to' value='{field('assigned_to')}'><label>Due date</label><input type='date' name='due_date' value='{field('due_date')}'><label>Status</label><select name='status'>{opts('status',['Open','In Progress','Resolved','Closed'],'Open')}</select><label>Resolution notes</label><textarea name='resolution_notes' rows='2'>{field('resolution_notes')}</textarea>
+  <label>Attach Certificate / File (PDF, JPG, PNG)</label><input type='file' name='attachment' accept='.pdf,.jpg,.jpeg,.png'><button>{'Save Changes' if editing else 'Add Corrective Action'}</button> {'<a class="btn" href="/actions">Cancel</a>' if editing else ''}</form></section><section class='panel'><h3>Actions register</h3><div class='table-wrap'><table><thead><tr><th>Title</th><th>Source</th><th>Location</th><th>Severity</th><th>Assigned to</th><th>Due date</th><th>Status</th><th>Actions / Attachment</th></tr></thead><tbody>{tr}</tbody></table></div></section>"""
+  return page(content)
+
+
+@app.route("/inspections", methods=["GET", "POST"])
+def inspections():
+  if session.get("role") != "admin":
+    flash("Access denied. Admin only.")
+    return redirect(url_for("dashboard"))
+  conn = get_db(); editing = None
+  try:
+    with conn.cursor() as db:
+      if request.method == "POST":
+        action = request.form.get("action", "add"); iid = request.form.get("inspection_id", type=int)
+        if action == "delete":
+          db.execute("SELECT filename FROM inspections WHERE id=%s", (iid,)); old = db.fetchone()
+          if old:
+            db.execute("DELETE FROM inspections WHERE id=%s", (iid,)); conn.commit()
+            if old.get("filename"):
+              try: (app.config["UPLOAD_FOLDER"] / old["filename"]).unlink(missing_ok=True)
+              except OSError: pass
+            log_action("delete_inspection", str(iid)); flash("Inspection deleted.")
+          return redirect(url_for("inspections"))
+        site = request.form.get("site_name", "").strip(); inspector = request.form.get("inspector", "").strip(); item = request.form.get("checklist_item", "").strip()
+        if not site or not inspector or not item:
+          flash("Site, inspector and checklist item are required.")
+        else:
+          try: new_file = save_upload(request.files.get("attachment"), "inspection")
+          except ValueError as exc:
+            flash(str(exc)); return redirect(url_for("inspections", edit=iid) if action == "edit" else url_for("inspections"))
+          insp_date = request.form.get("inspection_date") or date.today().isoformat(); due = request.form.get("due_date", "").strip() or None
+          result = request.form.get("result", "Pass")
+          if result not in {"Pass", "Fail", "Observation", "Not Applicable"}: result = "Pass"
+          status = request.form.get("status", "Open")
+          if status not in {"Open", "In Progress", "Closed"}: status = "Open"
+          findings = request.form.get("findings", "").strip(); corrective = request.form.get("corrective_action", "").strip(); assigned = request.form.get("assigned_to", "").strip() or None
+          if action == "edit" and iid:
+            db.execute("SELECT filename FROM inspections WHERE id=%s", (iid,)); old = db.fetchone()
+            if not old: flash("Inspection not found."); return redirect(url_for("inspections"))
+            filename = new_file or old.get("filename")
+            db.execute("UPDATE inspections SET site_name=%s, inspection_date=%s, inspector=%s, checklist_item=%s, result=%s, findings=%s, corrective_action=%s, assigned_to=%s, due_date=%s, status=%s, filename=%s WHERE id=%s", (site, insp_date, inspector, item, result, findings, corrective, assigned, due, status, filename, iid))
+            conn.commit()
+            if new_file and old.get("filename"):
+              try: (app.config["UPLOAD_FOLDER"] / old["filename"]).unlink(missing_ok=True)
+              except OSError: pass
+            log_action("edit_inspection", f"{site}: {item}"); flash("Inspection updated.")
+          else:
+            status = "Open" if result in {"Fail", "Observation"} else "Closed"
+            db.execute("INSERT INTO inspections (site_name, inspection_date, inspector, checklist_item, result, findings, corrective_action, assigned_to, due_date, status, filename) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", (site, insp_date, inspector, item, result, findings, corrective, assigned, due, status, new_file))
+            conn.commit(); log_action("create_inspection", f"{site}: {item} - {result}"); flash("Inspection finding saved.")
+          return redirect(url_for("inspections"))
+      edit_id = request.args.get("edit", type=int)
+      if edit_id: db.execute("SELECT * FROM inspections WHERE id=%s", (edit_id,)); editing = db.fetchone()
+      db.execute("SELECT * FROM inspections ORDER BY inspection_date DESC, id DESC"); rows = db.fetchall()
+  finally: conn.close()
+  e = editing or {}; field = lambda name: escape(str(e.get(name) or ""))
+  opts = lambda name, values, default: "".join(f"<option {'selected' if e.get(name, default)==v else ''}>{v}</option>" for v in values)
+  tr = "".join(f"<tr><td>{escape(str(r['inspection_date'] or ''))}</td><td>{escape(str(r['site_name'] or ''))}</td><td>{escape(str(r['inspector'] or ''))}</td><td>{escape(str(r['checklist_item'] or ''))}</td><td>{escape(str(r['result'] or ''))}</td><td>{escape(str(r['findings'] or '-'))}</td><td>{escape(str(r['assigned_to'] or '-'))}</td><td>{escape(str(r['due_date'] or '-'))}</td><td>{escape(str(r['status'] or ''))}</td><td>{('<a target=\'_blank\' href=\'/uploads/'+quote(str(r['filename']),safe='')+'\'>View file</a> · ') if r.get('filename') else ''}<a class='btn btn-sm' href='/inspections?edit={r['id']}'>Edit</a> <form method='post' style='display:inline' onsubmit=\"return confirm('Delete this inspection?')\"><input type='hidden' name='action' value='delete'><input type='hidden' name='inspection_id' value='{r['id']}'><button class='btn btn-danger btn-sm'>Delete</button></form></td></tr>" for r in rows) or "<tr><td colspan='10'>No inspections recorded yet.</td></tr>"
+  content = f"""<h2>Site Inspection Checklist</h2><section class='panel'><h3>{'Edit inspection' if editing else 'Record inspection item'}</h3><form method='post' enctype='multipart/form-data'><input type='hidden' name='action' value="{'edit' if editing else 'add'}"><input type='hidden' name='inspection_id' value="{e.get('id','') if editing else ''}">
+  <label>Site / project</label><input name='site_name' required value='{field('site_name')}'><label>Inspection date</label><input type='date' name='inspection_date' value='{field('inspection_date') or date.today().isoformat()}' required><label>Inspector</label><input name='inspector' required value='{field('inspector')}'><label>Checklist item</label><input name='checklist_item' required value='{field('checklist_item')}'><label>Result</label><select name='result'>{opts('result',['Pass','Fail','Observation','Not Applicable'],'Pass')}</select><label>Findings / notes</label><textarea name='findings' rows='3'>{field('findings')}</textarea><label>Corrective action required</label><textarea name='corrective_action' rows='2'>{field('corrective_action')}</textarea><label>Assigned to</label><input name='assigned_to' value='{field('assigned_to')}'><label>Due date</label><input type='date' name='due_date' value='{field('due_date')}'><label>Status</label><select name='status'>{opts('status',['Open','In Progress','Closed'],'Open')}</select><label>Attach Certificate / File (PDF, JPG, PNG)</label><input type='file' name='attachment' accept='.pdf,.jpg,.jpeg,.png'><button>{'Save Changes' if editing else 'Save Inspection'}</button> {'<a class="btn" href="/inspections">Cancel</a>' if editing else ''}</form></section><section class='panel'><h3>Inspection register</h3><div class='table-wrap'><table><thead><tr><th>Date</th><th>Site</th><th>Inspector</th><th>Checklist item</th><th>Result</th><th>Findings</th><th>Assigned to</th><th>Due date</th><th>Status</th><th>Actions / Attachment</th></tr></thead><tbody>{tr}</tbody></table></div></section>"""
+  return page(content)
+
+
+@app.route("/reports")
+def reports():
+  if session.get("role") != "admin":
+    flash("Access denied. Admin only.")
+    return redirect(url_for("dashboard"))
+  conn = get_db()
+  try:
+    with conn.cursor() as db:
+      db.execute("SELECT status, COUNT(*) AS total FROM safety_reports GROUP BY status"); safety_counts = db.fetchall()
+      db.execute("SELECT COUNT(*) AS total FROM corrective_actions WHERE status NOT IN ('Resolved','Closed')"); open_actions = db.fetchone()["total"]
+      db.execute("SELECT COUNT(*) AS total FROM inspections WHERE result IN ('Fail','Observation')"); inspection_issues = db.fetchone()["total"]
+      db.execute("SELECT id, username, action, details, created_at FROM audit_logs ORDER BY id DESC LIMIT 100"); logs = db.fetchall()
+      db.execute("SELECT expiry_date AS expiry FROM training WHERE expiry_date IS NOT NULL AND expiry_date <> '' UNION ALL SELECT review_date AS expiry FROM documents WHERE review_date IS NOT NULL AND review_date <> ''")
+      dates = db.fetchall()
+  finally: conn.close()
+  today = date.today(); soon = today + timedelta(days=30); expired = 0; expiring = 0
+  for row in dates:
+    try:
+      d = date.fromisoformat(str(row["expiry"])[:10])
+      if d < today: expired += 1
+      elif d <= soon: expiring += 1
+    except (ValueError, TypeError): pass
+  safety_html = "".join(f"<li>{r['status']}: <strong>{r['total']}</strong></li>" for r in safety_counts) or "<li>No safety reports.</li>"
+  logs_html = "".join(f"<tr><td>{r['created_at']}</td><td>{r['username'] or 'System'}</td><td>{r['action']}</td><td>{r['details'] or '-'}</td></tr>" for r in logs) or "<tr><td colspan='4'>No audit entries yet.</td></tr>"
+  content = f"""<h2>Reports & Audit Log</h2><div class='cards'><div class='card'>Expired training/document dates<div class='number'>{expired}</div></div><div class='card'>Due within 30 days<div class='number'>{expiring}</div></div><div class='card'>Open corrective actions<div class='number'>{open_actions}</div></div><div class='card'>Inspection findings<div class='number'>{inspection_issues}</div></div></div><section class='panel'><h3>Safety report status</h3><ul>{safety_html}</ul><p class='muted'>Use the browser's Print option to save this page as PDF. Date alerts are based on existing date fields; check source records for invalid legacy dates.</p><button onclick='window.print()'>Print / Save PDF</button></section><section class='panel'><h3>Recent audit activity (last 100)</h3><div class='table-wrap'><table><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead><tbody>{logs_html}</tbody></table></div></section>"""
+  return page(content)
+
+
 @app.route("/uploads/<filename>")
 def uploaded_file(filename):
-  return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
+  if "user_id" not in session:
+    return redirect(url_for("login"))
+  # Admin can view stored files. Protégés can only access files attached to their own CIDB records.
+  if session.get("role") == "admin":
+    return send_from_directory(app.config["UPLOAD_FOLDER"], filename, as_attachment=False)
+  conn = get_db()
+  try:
+    with conn.cursor() as db:
+      db.execute("SELECT id FROM cidb_uploads WHERE filename = %s AND user_id = %s", (filename, session["user_id"]))
+      allowed = db.fetchone()
+  finally:
+    conn.close()
+  if not allowed:
+    return "Access denied", 403
+  return send_from_directory(app.config["UPLOAD_FOLDER"], filename, as_attachment=False)
 
 
 if __name__ == "__main__":
   init_db()
-  app.run(debug=True, port=5000)
+  app.run(debug=os.environ.get("FLASK_DEBUG", "0") == "1", host="127.0.0.1", port=int(os.environ.get("PORT", "5000")))
