@@ -208,6 +208,84 @@ def init_db():
         ) ENGINE=InnoDB;
       """)
 
+      # Protégé tasks assigned by an administrator
+      cursor.execute("""
+        CREATE TABLE IF NOT EXISTS protege_tasks (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          title VARCHAR(180) NOT NULL,
+          description TEXT NULL,
+          priority VARCHAR(20) NOT NULL DEFAULT 'Normal',
+          due_date DATE NULL,
+          status VARCHAR(30) NOT NULL DEFAULT 'To Do',
+          completion_note TEXT NULL,
+          created_by INT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          completed_at DATETIME NULL,
+          CONSTRAINT fk_task_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          CONSTRAINT fk_task_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB;
+      """)
+
+      # Protégé work diary / weekly activity log
+      cursor.execute("""
+        CREATE TABLE IF NOT EXISTS protege_work_logs (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          activity_date DATE NOT NULL,
+          activity_title VARCHAR(180) NOT NULL,
+          description TEXT NULL,
+          skills_learned TEXT NULL,
+          challenges TEXT NULL,
+          hours_spent DECIMAL(5,2) NULL,
+          status VARCHAR(30) NOT NULL DEFAULT 'Submitted',
+          supervisor_feedback TEXT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT fk_worklog_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB;
+      """)
+
+      # Safety submissions made by Protégés, separate from admin-managed safety records
+      cursor.execute("""
+        CREATE TABLE IF NOT EXISTS protege_safety_submissions (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          title VARCHAR(150) NOT NULL,
+          category VARCHAR(50) NOT NULL,
+          location VARCHAR(180) NULL,
+          description TEXT NOT NULL,
+          filename VARCHAR(255) NULL,
+          status VARCHAR(30) NOT NULL DEFAULT 'Submitted',
+          admin_response TEXT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT fk_safety_submit_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB;
+      """)
+
+      # Company announcements and reminders
+      cursor.execute("""
+        CREATE TABLE IF NOT EXISTS protege_announcements (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          title VARCHAR(180) NOT NULL,
+          body TEXT NOT NULL,
+          announcement_type VARCHAR(40) NOT NULL DEFAULT 'General',
+          due_date DATE NULL,
+          created_by INT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT fk_announcement_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB;
+      """)
+
+      # Add review metadata to existing Protégé document uploads
+      for col, definition in [
+          ("review_status", "VARCHAR(30) NOT NULL DEFAULT 'Pending'"),
+          ("review_note", "TEXT NULL"),
+          ("reviewed_at", "DATETIME NULL"),
+      ]:
+        cursor.execute(f"SHOW COLUMNS FROM cidb_uploads LIKE '{col}'")
+        if not cursor.fetchone():
+          cursor.execute(f"ALTER TABLE cidb_uploads ADD COLUMN {col} {definition}")
+
       # Auto-patch existing tables if filename column is missing
       for tbl in ["safety_reports", "documents", "training", "employees", "corrective_actions", "inspections"]:
         cursor.execute(f"SHOW COLUMNS FROM {tbl} LIKE 'filename'")
@@ -276,74 +354,79 @@ PAGE = """
 * { box-sizing: border-box; }
 body {
     margin: 0; font-family: Arial, sans-serif;
-    background: #f3f6f5; color: #24332e;
+    background: #f8f6f0; color: #2d3732;
     display: flex; flex-direction: column; min-height: 100vh;
 }
 header {
-    background: #183b35; color: white;
+    background: #2d4a3e; color: #f4efe6;
     padding: 22px 5%;
     display: flex; justify-content: space-between; align-items: center;
 }
 header h1 { margin: 0 0 6px; font-size: 24px; }
-header p { margin: 0; color: #d5e7df; }
+header p { margin: 0; color: #c2d4cb; }
 .user-info { text-align: right; font-size: 14px; }
-.user-info a { color: #ffd166; text-decoration: none; font-weight: bold; }
+.user-info a { color: #e8c580; text-decoration: none; font-weight: bold; }
 nav {
-    background: white; padding: 14px 5%;
+    background: #ffffff; padding: 14px 5%;
     display: flex; flex-wrap: wrap; gap: 18px;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid #e8e3d8;
 }
-nav a { color: #23594b; text-decoration: none; font-weight: bold; }
+nav a { color: #3b6251; text-decoration: none; font-weight: bold; }
 main { max-width: 1100px; margin: 28px auto; padding: 0 18px; flex: 1; }
 .cards {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;
 }
 .card {
-    background: white; padding: 20px;
+    background: #ffffff; padding: 20px;
     border-radius: 12px; margin-bottom: 18px;
-    box-shadow: 0 2px 8px #0000000a;
+    box-shadow: 0 4px 16px rgba(45, 74, 62, 0.05);
+    border: 1px solid #eef2f0;
     text-decoration: none; color: inherit; display: block;
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 .card:hover {
     transform: translateY(-3px);
-    box-shadow: 0 4px 12px #00000015;
+    box-shadow: 0 8px 24px rgba(45, 74, 62, 0.1);
 }
 .panel {
-    background: white; padding: 20px;
+    background: #ffffff; padding: 20px;
     border-radius: 12px; margin-bottom: 18px;
-    box-shadow: 0 2px 8px #0000000a;
+    box-shadow: 0 4px 16px rgba(45, 74, 62, 0.05);
+    border: 1px solid #eef2f0;
 }
-.number { font-size: 30px; font-weight: bold; color: #23594b; }
-label { display: block; margin-top: 12px; font-weight: bold; }
+.number { font-size: 30px; font-weight: bold; color: #3b6251; }
+label { display: block; margin-top: 12px; font-weight: bold; color: #43544c; }
 input, select, textarea {
     width: 100%; padding: 10px; margin-top: 6px;
-    border: 1px solid #ccd5d1; border-radius: 6px;
+    border: 1px solid #d8e0dc; border-radius: 8px;
+    background: #fafaf8; color: #2d3732;
 }
 button, .btn {
-    background: #23594b; color: white; border: 0;
+    background: #3b6251; color: #f8f6f0; border: 0;
     padding: 11px 18px; margin-top: 14px;
-    border-radius: 6px; cursor: pointer; text-decoration: none; display: inline-block;
+    border-radius: 8px; cursor: pointer; text-decoration: none; display: inline-block;
+    font-weight: 600;
 }
-.btn-danger { background: #d90429; }
-.btn-warning { background: #f0ad4e; color: white; }
+button:hover, .btn:hover { background: #2d4a3e; }
+.btn-danger { background: #c85a54; }
+.btn-warning { background: #dfa85b; color: #2d3732; }
 .btn-sm { padding: 6px 12px; margin-top: 4px; font-size: 12px; }
-table { width: 100%; border-collapse: collapse; background: white; }
-th, td { padding: 11px; border-bottom: 1px solid #e2e8e5; text-align: left; }
+table { width: 100%; border-collapse: collapse; background: #ffffff; }
+th, td { padding: 11px; border-bottom: 1px solid #ebece8; text-align: left; }
 .clickable-row { cursor: pointer; transition: background 0.2s; }
-.clickable-row:hover { background: #f0f7f4; }
+.clickable-row:hover { background: #f0f4f2; }
 .table-wrap { overflow-x: auto; }
-.badge { background: #e4eee8; padding: 5px 8px; border-radius: 6px; }
-.muted { color: #66756e; }
-.alert { background: #ffccd5; color: #780016; padding: 10px; border-radius: 6px; margin-bottom: 15px; }
+.badge { background: #e3ece8; color: #2d4a3e; padding: 5px 8px; border-radius: 20px; font-weight: 600; }
+.muted { color: #7a8c83; }
+.alert { background: #fbf0ee; color: #8a332d; padding: 12px 16px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #c85a54; }
 
 /* Footer Styling */
 footer {
-    background: #183b35; color: #d5e7df; text-align: center;
+    background: #1e382c; color: #b0c4ba; text-align: center;
     padding: 16px 5%; margin-top: 40px; font-size: 13px;
-    border-top: 3px solid #23594b;
+    border-top: 3px solid #2d4a3e;
 }
-footer strong { color: #ffd166; }
+footer strong { color: #e8c580; }
 
 /* Password Eye Icon Styling */
 .password-container {
@@ -358,7 +441,7 @@ footer strong { color: #ffd166; }
     position: absolute; right: 10px; top: 53%;
     transform: translateY(-50%); cursor: pointer;
     background: none; border: none; padding: 0; margin: 0;
-    display: flex; align-items: center; justify-content: center; color: #333;
+    display: flex; align-items: center; justify-content: center; color: #7a8c83;
 }
 .toggle-eye-btn svg {
     width: 22px; height: 22px; stroke: currentColor;
@@ -367,27 +450,28 @@ footer strong { color: #ffd166; }
 
 /* Password Strength Indicator Styles */
 .strength-meter { margin-top: 6px; font-size: 13px; font-weight: bold; }
-.text-weak { color: #d90429; }
-.text-moderate { color: #f77f00; }
-.text-strong { color: #2a9d8f; }
+.text-weak { color: #c85a54; }
+.text-moderate { color: #dfa85b; }
+.text-strong { color: #52826e; }
 
 /* Modal Styles for Enlarging Data / Editing */
 .modal-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0, 0, 0, 0.5); display: none; justify-content: center; align-items: center;
-    z-index: 1000;
+    background: rgba(30, 56, 44, 0.4); display: none; justify-content: center; align-items: center;
+    z-index: 1000; backdrop-filter: blur(4px);
 }
 .modal-content {
-    background: white; padding: 25px; border-radius: 12px; max-width: 500px; width: 90%;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3); position: relative; max-height: 90vh; overflow-y: auto;
+    background: #ffffff; padding: 25px; border-radius: 16px; max-width: 500px; width: 90%;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12); position: relative; max-height: 90vh; overflow-y: auto;
+    border: 1px solid #ebece8;
 }
 .modal-close {
-    position: absolute; top: 12px; right: 16px; font-size: 22px; cursor: pointer; color: #666;
+    position: absolute; top: 12px; right: 16px; font-size: 22px; cursor: pointer; color: #7a8c83;
     font-weight: bold;
 }
 .modal-field { margin-bottom: 12px; }
-.modal-field label { font-weight: bold; color: #183b35; margin-bottom: 2px; }
-.modal-field div { background: #f8faf9; padding: 8px 12px; border-radius: 6px; border: 1px solid #e0e8e4; }
+.modal-field label { font-weight: bold; color: #2d4a3e; margin-bottom: 2px; }
+.modal-field div { background: #f8f6f0; padding: 8px 12px; border-radius: 8px; border: 1px solid #e8e3d8; }
 </style>
 </head>
 <body>
@@ -417,7 +501,16 @@ footer strong { color: #ffd166; }
         <a href="/actions">Corrective Actions</a>
         <a href="/inspections">Site Inspections</a>
         <a href="/reports">Reports & Audit Log</a>
+        <a href="/tasks">Protégé Tasks</a>
+        <a href="/work-log">Work Logs</a>
+        <a href="/submit-safety">Protégé Safety Inbox</a>
+        <a href="/announcements">Announcements</a>
     {% elif session.get('role') == 'protege' %}
+        <a href="/my-tasks">My Tasks</a>
+        <a href="/my-training">My Training</a>
+        <a href="/work-log">My Work Log</a>
+        <a href="/submit-safety">Submit Safety Report</a>
+        <a href="/announcements">Announcements</a>
         <a href="/my-cidb">My CIDB Documents</a>
     {% endif %}
 </nav>
@@ -467,7 +560,7 @@ footer strong { color: #ffd166; }
             <label>Description</label>
             <textarea id="edit_safety_description" name="description" rows="3" maxlength="3000"></textarea>
             
-            <label>Replace File (Optional)</label>
+            <label>Replace Certificate / File (Optional)</label>
             <input type="file" name="file" accept=".png, .jpg, .jpeg, .pdf">
             
             <button type="submit" class="btn" style="margin-top: 15px;">Save Changes</button>
@@ -500,7 +593,7 @@ footer strong { color: #ffd166; }
             <label>Next Review Date</label>
             <input type="date" id="edit_doc_review_date" name="review_date">
             
-            <label>Replace File (Optional)</label>
+            <label>Replace Certificate / File (Optional)</label>
             <input type="file" name="file" accept=".png, .jpg, .jpeg, .pdf">
             
             <button type="submit" class="btn" style="margin-top: 15px;">Save Changes</button>
@@ -548,7 +641,7 @@ footer strong { color: #ffd166; }
             <label>Document Title</label>
             <input type="text" id="edit_cidb_title" name="title" required maxlength="150">
             
-            <label>Replace File (Optional)</label>
+            <label>Replace Certificate / File (Optional)</label>
             <input type="file" name="file" accept=".png, .jpg, .jpeg, .pdf">
             
             <button type="submit" class="btn" style="margin-top: 15px;">Save Changes</button>
@@ -672,6 +765,19 @@ function openEditCidbModal(id, title) {
     document.getElementById('edit_cidb_title').value = title;
     document.getElementById('editCidbModal').style.display = 'flex';
 }
+
+// Toggle Custom Dates visibility for reports filter
+document.addEventListener('DOMContentLoaded', function() {
+    const filterSelect = document.querySelector('select[name="filter"]');
+    if (filterSelect) {
+        filterSelect.addEventListener('change', function() {
+            const customDatesDiv = document.getElementById('custom_dates');
+            if (customDatesDiv) {
+                customDatesDiv.style.display = (this.value === 'custom') ? 'flex' : 'none';
+            }
+        });
+    }
+});
 </script>
 </body>
 </html>
@@ -802,22 +908,63 @@ def dashboard():
   if "user_id" not in session:
     return redirect(url_for("login"))
 
-  # Protégés see only their own document summary, not company-wide QSHET records.
+  # Protégés see only their own records and assigned work.
   if session.get("role") != "admin":
     conn = get_db()
     try:
       with conn.cursor() as db:
         db.execute("SELECT COUNT(*) AS cnt FROM cidb_uploads WHERE user_id = %s", (session["user_id"],))
         my_docs = db.fetchone()["cnt"]
+        db.execute("SELECT COUNT(*) AS cnt FROM protege_tasks WHERE user_id=%s AND status NOT IN ('Completed','Cancelled')", (session["user_id"],))
+        my_tasks = db.fetchone()["cnt"]
+        db.execute("SELECT COUNT(*) AS cnt FROM protege_tasks WHERE user_id=%s AND status NOT IN ('Completed','Cancelled') AND due_date IS NOT NULL AND due_date < CURDATE()", (session["user_id"],))
+        overdue_tasks = db.fetchone()["cnt"]
+        db.execute("SELECT COUNT(*) AS cnt FROM protege_work_logs WHERE user_id=%s", (session["user_id"],))
+        my_logs = db.fetchone()["cnt"]
+        db.execute("SELECT COUNT(*) AS cnt FROM cidb_uploads WHERE user_id=%s AND review_status IN ('Pending','Needs Changes')", (session["user_id"],))
+        pending_docs = db.fetchone()["cnt"]
+        db.execute("SELECT id,title,priority,due_date,status FROM protege_tasks WHERE user_id=%s ORDER BY CASE WHEN status='Completed' THEN 1 ELSE 0 END, due_date IS NULL, due_date ASC, id DESC LIMIT 5", (session["user_id"],))
+        task_rows = db.fetchall()
+        db.execute("SELECT id,title,announcement_type,due_date,created_at FROM protege_announcements ORDER BY id DESC LIMIT 5")
+        announcement_rows = db.fetchall()
     finally:
       conn.close()
+
+    task_html = "<div class='table-wrap'><table><thead><tr><th>Task</th><th>Priority</th><th>Due date</th><th>Status</th></tr></thead><tbody>"
+    if task_rows:
+      for task in task_rows:
+        due = task['due_date'].strftime('%d %b %Y') if task['due_date'] else '—'
+        task_html += f"<tr><td>{escape(task['title'])}</td><td>{escape(task['priority'])}</td><td>{due}</td><td><span class='badge'>{escape(task['status'])}</span></td></tr>"
+    else:
+      task_html += "<tr><td colspan='4' class='muted'>No tasks assigned yet.</td></tr>"
+    task_html += "</tbody></table></div>"
+    ann_html = "<ul>"
+    if announcement_rows:
+      for item in announcement_rows:
+        due = item['due_date'].strftime('%d %b %Y') if item['due_date'] else 'No deadline'
+        ann_html += f"<li><strong>{escape(item['title'])}</strong> — {escape(item['announcement_type'])} <span class='muted'>({due})</span></li>"
+    else:
+      ann_html += "<li class='muted'>No announcements yet.</li>"
+    ann_html += "</ul>"
     content = f"""
       <h2>Protégé Dashboard</h2>
-      <p class="muted">Welcome, {session.get('username')}.</p>
+      <p class="muted">Welcome, {escape(session.get('username', 'Protégé') or 'Protégé')}. Your personal QSHET workspace.</p>
       <div class="cards">
-        <a href="/my-cidb" class="card">My CIDB & Protégé Documents<div class="number">{my_docs}</div></a>
+        <a href="/my-tasks" class="card">My Open Tasks<div class="number">{my_tasks}</div></a>
+        <a href="/my-cidb" class="card">My Documents<div class="number">{my_docs}</div></a>
+        <a href="/my-cidb" class="card">Documents Needing Review<div class="number">{pending_docs}</div></a>
+        <a href="/my-tasks" class="card">Overdue Tasks<div class="number">{overdue_tasks}</div></a>
+        <a href="/work-log" class="card">Work Logs Submitted<div class="number">{my_logs}</div></a>
       </div>
-      <section class="panel"><h3>Your account</h3><p>Use the My CIDB page to upload and manage your own documents. Contact the QSHET administrator if you need help with your account.</p><a class="btn" href="/change-password">Change password</a></section>
+      <section class="panel"><h3>My Recent Tasks</h3>{task_html}<a class="btn" href="/my-tasks">View all tasks</a></section>
+      <section class="panel"><h3>Latest Announcements</h3>{ann_html}<a class="btn" href="/announcements">View announcements</a></section>
+      <section class="panel"><h3>Quick Actions</h3>
+        <a class="btn" href="/work-log">Add Work Log</a>
+        <a class="btn" href="/submit-safety">Submit Safety Report</a>
+        <a class="btn" href="/my-cidb">Upload / Check Documents</a>
+        <a class="btn" href="/my-training">View My Training</a>
+        <a class="btn" href="/change-password">Change Password</a>
+      </section>
     """
     return page(content)
 
@@ -1088,7 +1235,12 @@ def safety():
         </select>
         <label>Description</label>
         <textarea name="description" rows="3" maxlength="3000"></textarea>
-        <label>Attach Document or Picture (Optional)</label>
+        <label>
+            Attach Certificate / File (Optional)<br>
+            <span style="font-size: 12px; font-weight: normal; color: #7a8c83;">
+                Supported formats: PDF, JPG, PNG
+            </span>
+        </label>
         <input type="file" name="file" accept=".png, .jpg, .jpeg, .pdf">
         <button type="submit">Save Report</button>
     </form>
@@ -1238,7 +1390,12 @@ def documents():
         </select>
         <label>Next Review Date</label>
         <input type="date" name="review_date">
-        <label>Attach Document or Picture (Optional)</label>
+        <label>
+            Attach Certificate / File (Optional)<br>
+            <span style="font-size: 12px; font-weight: normal; color: #7a8c83;">
+                Supported formats: PDF, JPG, PNG
+            </span>
+        </label>
         <input type="file" name="file" accept=".png, .jpg, .jpeg, .pdf">
         <button type="submit">Save Document Record</button>
     </form>
@@ -1383,7 +1540,12 @@ def training():
         <input name="course" required maxlength="150">
         <label>Certificate Expiry Date</label>
         <input type="date" name="expiry_date">
-        <label>Attach Certificate / File (Optional)</label>
+        <label>
+            Attach Certificate / File (Optional)<br>
+            <span style="font-size: 12px; font-weight: normal; color: #7a8c83;">
+                Supported formats: PDF, JPG, PNG
+            </span>
+        </label>
         <input type="file" name="file" accept=".png, .jpg, .jpeg, .pdf">
         <button type="submit">Save Training Record</button>
     </form>
@@ -1450,7 +1612,7 @@ def my_cidb():
                 )
               else:
                 db.execute(
-                    "UPDATE cidb_uploads SET title = %s, filename = %s WHERE id = %s AND user_id = %s",
+                    "UPDATE cidb_uploads SET title = %s, filename = %s, review_status='Pending', review_note=NULL, reviewed_at=NULL WHERE id = %s AND user_id = %s",
                     (title, filename, record_id, user_id),
                 )
             else:
@@ -1490,7 +1652,7 @@ def my_cidb():
     with conn.cursor() as db:
       db.execute(
           """
-                SELECT id, title, filename, uploaded_at 
+                SELECT id, title, filename, uploaded_at, review_status, review_note, reviewed_at 
                 FROM cidb_uploads WHERE user_id = %s ORDER BY id DESC
             """,
           (user_id,),
@@ -1501,7 +1663,7 @@ def my_cidb():
 
   table_html = (
       "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Title</th><th>File</th><th>Uploaded"
-      " Date</th><th>Actions</th></tr></thead><tbody>"
+      " Date</th><th>Review Status</th><th>Review Note</th><th>Actions</th></tr></thead><tbody>"
   )
   for r in rows:
     file_link = f'<a href="/uploads/{r["filename"]}" target="_blank">View File</a>'
@@ -1512,6 +1674,8 @@ def my_cidb():
             <td>{r['title']}</td>
             <td>{file_link}</td>
             <td>{r['uploaded_at']}</td>
+            <td><span class="badge">{r.get('review_status', 'Pending')}</span></td>
+            <td>{escape(r.get('review_note') or '—')}</td>
             <td>
                 <button type="button" class="btn btn-warning btn-sm" onclick="openEditCidbModal('{r['id']}', '{escaped_title}')">Edit</button>
                 <form method="post" onsubmit="return confirm('Delete this record?');" style="display:inline;">
@@ -1531,7 +1695,12 @@ def my_cidb():
     <form method="post" enctype="multipart/form-data">
         <label>Document Title</label>
         <input name="title" required maxlength="150" placeholder="e.g., Green Card CIDB, CV, Certificate">
-        <label>Attach File (PDF, JPG, PNG)</label>
+        <label>
+            Attach Certificate / File (Optional)<br>
+            <span style="font-size: 12px; font-weight: normal; color: #7a8c83;">
+                Supported formats: PDF, JPG, PNG
+            </span>
+        </label>
         <input type="file" name="file" accept=".png, .jpg, .jpeg, .pdf" required>
         <button type="submit">Upload Document</button>
     </form>
@@ -1541,6 +1710,312 @@ def my_cidb():
     </section>
     """
   return page(content)
+
+
+# ---------- PROTÉGÉ WORKSPACE: TASKS ----------
+
+@app.route("/my-tasks", methods=["GET", "POST"])
+def my_tasks():
+  if "user_id" not in session:
+    return redirect(url_for("login"))
+  if session.get("role") == "admin":
+    return redirect(url_for("tasks"))
+  user_id = session["user_id"]
+  if request.method == "POST":
+    task_id = request.form.get("task_id", type=int)
+    status = request.form.get("status", "In Progress").strip()
+    note = request.form.get("completion_note", "").strip()
+    if status not in ("To Do", "In Progress", "Completed"):
+      flash("Invalid task status.")
+      return redirect(url_for("my_tasks"))
+    conn = get_db()
+    try:
+      with conn.cursor() as db:
+        db.execute("UPDATE protege_tasks SET status=%s, completion_note=%s, completed_at=%s WHERE id=%s AND user_id=%s",
+                   (status, note or None, datetime.now() if status == "Completed" else None, task_id, user_id))
+      conn.commit()
+    finally:
+      conn.close()
+    log_action("update_task_progress", f"Task {task_id}: {status}")
+    flash("Task progress updated.")
+    return redirect(url_for("my_tasks"))
+  conn = get_db()
+  try:
+    with conn.cursor() as db:
+      db.execute("SELECT * FROM protege_tasks WHERE user_id=%s ORDER BY CASE WHEN status='Completed' THEN 1 ELSE 0 END, due_date IS NULL, due_date ASC, id DESC", (user_id,))
+      rows = db.fetchall()
+  finally:
+    conn.close()
+  html = "<div class='table-wrap'><table><thead><tr><th>Task</th><th>Priority</th><th>Due</th><th>Status / Update</th></tr></thead><tbody>"
+  if rows:
+    for r in rows:
+      due = r['due_date'].strftime('%d %b %Y') if r['due_date'] else '—'
+      html += f"<tr><td><strong>{escape(r['title'])}</strong><br>{escape(r['description'] or '')}</td><td>{escape(r['priority'])}</td><td>{due}</td><td><form method='post'><input type='hidden' name='task_id' value='{r['id']}'><select name='status'><option {'selected' if r['status']=='To Do' else ''}>To Do</option><option {'selected' if r['status']=='In Progress' else ''}>In Progress</option><option {'selected' if r['status']=='Completed' else ''}>Completed</option></select><textarea name='completion_note' rows='2' placeholder='Progress / completion note'>{escape(r['completion_note'] or '')}</textarea><button class='btn-sm' type='submit'>Save Progress</button></form></td></tr>"
+  else:
+    html += "<tr><td colspan='4' class='muted'>No tasks have been assigned to you yet.</td></tr>"
+  html += "</tbody></table></div>"
+  return page(f"<h2>My Tasks & Assignments</h2><p class='muted'>Update progress on your assigned tasks. Only your own assignments are shown here.</p><section class='panel'>{html}</section>")
+
+
+@app.route("/tasks", methods=["GET", "POST"])
+def tasks():
+  if session.get("role") != "admin":
+    flash("Access denied. Admin only.")
+    return redirect(url_for("dashboard"))
+  conn = get_db()
+  try:
+    if request.method == "POST":
+      action = request.form.get("action", "create")
+      if action == "delete":
+        task_id = request.form.get("task_id", type=int)
+        with conn.cursor() as db:
+          db.execute("DELETE FROM protege_tasks WHERE id=%s", (task_id,))
+        conn.commit()
+        log_action("delete_protege_task", f"Task {task_id}")
+        flash("Task deleted.")
+        return redirect(url_for("tasks"))
+      user_id = request.form.get("user_id", type=int)
+      title = request.form.get("title", "").strip()
+      description = request.form.get("description", "").strip()
+      priority = request.form.get("priority", "Normal")
+      due_raw = request.form.get("due_date", "").strip()
+      if not user_id or not title:
+        flash("Select a Protégé and enter a task title.")
+      else:
+        with conn.cursor() as db:
+          db.execute("SELECT id FROM users WHERE id=%s AND role='protege'", (user_id,))
+          target = db.fetchone()
+          if not target:
+            flash("Selected account is not a Protégé.")
+          else:
+            db.execute("INSERT INTO protege_tasks (user_id,title,description,priority,due_date,created_by) VALUES (%s,%s,%s,%s,%s,%s)",
+                       (user_id,title,description or None,priority,due_raw or None,session.get('user_id')))
+            conn.commit()
+            log_action("create_protege_task", f"Assigned task '{title}' to user {user_id}")
+            flash("Task assigned successfully.")
+            return redirect(url_for("tasks"))
+    with conn.cursor() as db:
+      db.execute("SELECT id,username FROM users WHERE role='protege' ORDER BY username")
+      users = db.fetchall()
+      db.execute("SELECT t.*,u.username FROM protege_tasks t JOIN users u ON u.id=t.user_id ORDER BY t.id DESC")
+      rows = db.fetchall()
+  finally:
+    conn.close()
+  user_options = "".join(f"<option value='{u['id']}'>{escape(u['username'])}</option>" for u in users)
+  table = "<div class='table-wrap'><table><thead><tr><th>Protégé</th><th>Task</th><th>Priority</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody>"
+  for r in rows:
+    due = r['due_date'].strftime('%d %b %Y') if r['due_date'] else '—'
+    table += f"<tr><td>{escape(r['username'])}</td><td>{escape(r['title'])}<br><span class='muted'>{escape(r['description'] or '')}</span></td><td>{escape(r['priority'])}</td><td>{due}</td><td>{escape(r['status'])}</td><td><form method='post' onsubmit=\"return confirm('Delete this task?')\"><input type='hidden' name='action' value='delete'><input type='hidden' name='task_id' value='{r['id']}'><button class='btn-danger btn-sm'>Delete</button></form></td></tr>"
+  table += "</tbody></table></div>"
+  return page(f"<h2>Protégé Task Management</h2><section class='panel'><h3>Assign a Task</h3><form method='post'><label>Protégé</label><select name='user_id' required>{user_options}</select><label>Task title</label><input name='title' maxlength='180' required><label>Description / expected output</label><textarea name='description' rows='3'></textarea><label>Priority</label><select name='priority'><option>Low</option><option selected>Normal</option><option>High</option><option>Urgent</option></select><label>Due date</label><input type='date' name='due_date'><button type='submit'>Assign Task</button></form></section><section class='panel'><h3>All Assigned Tasks</h3>{table}</section>")
+
+
+# ---------- PROTÉGÉ WORK DIARY ----------
+
+@app.route("/work-log", methods=["GET", "POST"])
+def work_log():
+  if "user_id" not in session:
+    return redirect(url_for("login"))
+  is_admin = session.get("role") == "admin"
+  conn = get_db()
+  try:
+    if request.method == "POST":
+      if is_admin:
+        flash("Admins can review logs here; Protégés submit their own logs from their account.")
+        return redirect(url_for("work_log"))
+      activity_date = request.form.get("activity_date", "").strip()
+      title = request.form.get("activity_title", "").strip()
+      description = request.form.get("description", "").strip()
+      skills = request.form.get("skills_learned", "").strip()
+      challenges = request.form.get("challenges", "").strip()
+      hours = request.form.get("hours_spent", "").strip() or None
+      try:
+        if hours is not None and (float(hours) < 0 or float(hours) > 24):
+          raise ValueError
+      except ValueError:
+        flash("Hours must be a number between 0 and 24.")
+        return redirect(url_for("work_log"))
+      if not activity_date or not title:
+        flash("Activity date and title are required.")
+        return redirect(url_for("work_log"))
+      with conn.cursor() as db:
+        db.execute("INSERT INTO protege_work_logs (user_id,activity_date,activity_title,description,skills_learned,challenges,hours_spent) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                   (session['user_id'],activity_date,title,description or None,skills or None,challenges or None,hours))
+      conn.commit()
+      log_action("submit_work_log", title)
+      flash("Work log submitted.")
+      return redirect(url_for("work_log"))
+    with conn.cursor() as db:
+      if is_admin:
+        db.execute("SELECT l.*,u.username FROM protege_work_logs l JOIN users u ON u.id=l.user_id ORDER BY l.activity_date DESC,l.id DESC")
+      else:
+        db.execute("SELECT l.*,u.username FROM protege_work_logs l JOIN users u ON u.id=l.user_id WHERE l.user_id=%s ORDER BY l.activity_date DESC,l.id DESC", (session['user_id'],))
+      rows = db.fetchall()
+  finally:
+    conn.close()
+  table = "<div class='table-wrap'><table><thead><tr><th>Date</th><th>Protégé</th><th>Activity</th><th>Skills learned</th><th>Hours</th><th>Review</th></tr></thead><tbody>"
+  for r in rows:
+    d = r['activity_date'].strftime('%d %b %Y') if r['activity_date'] else '—'
+    table += f"<tr><td>{d}</td><td>{escape(r['username'])}</td><td><strong>{escape(r['activity_title'])}</strong><br>{escape(r['description'] or '')}<br><span class='muted'>Challenges: {escape(r['challenges'] or '—')}</span></td><td>{escape(r['skills_learned'] or '—')}</td><td>{escape(str(r['hours_spent']) if r['hours_spent'] is not None else '—')}</td><td>{escape(r['status'])}{('<br>'+escape(r['supervisor_feedback'])) if r['supervisor_feedback'] else ''}</td></tr>"
+  if not rows:
+    table += "<tr><td colspan='6' class='muted'>No work logs submitted yet.</td></tr>"
+  table += "</tbody></table></div>"
+  form = ""
+  if not is_admin:
+    form = f"<section class='panel'><h3>Submit Work Log</h3><form method='post'><label>Activity date</label><input type='date' name='activity_date' value='{date.today().isoformat()}' required><label>Activity / task title</label><input name='activity_title' maxlength='180' required><label>What did you do?</label><textarea name='description' rows='3'></textarea><label>Skills or knowledge learned</label><textarea name='skills_learned' rows='2'></textarea><label>Challenges / follow-up needed</label><textarea name='challenges' rows='2'></textarea><label>Hours spent (optional)</label><input type='number' name='hours_spent' min='0' max='24' step='0.25'><button type='submit'>Submit Work Log</button></form></section>"
+  return page(f"<h2>{'Protégé Work Logs' if is_admin else 'My Daily / Weekly Work Log'}</h2><p class='muted'>{'All Protégé submissions.' if is_admin else 'Record your activities, what you learned, and any follow-up needed.'}</p>{form}<section class='panel'><h3>{'Submitted Logs' if is_admin else 'My Submitted Logs'}</h3>{table}</section>")
+
+
+# ---------- PROTÉGÉ TRAINING VIEW ----------
+
+@app.route("/my-training")
+def my_training():
+  if "user_id" not in session:
+    return redirect(url_for("login"))
+  if session.get("role") == "admin":
+    return redirect(url_for("training"))
+  conn = get_db()
+  try:
+    with conn.cursor() as db:
+      db.execute("SELECT full_name FROM employees WHERE user_id=%s LIMIT 1", (session['user_id'],))
+      employee = db.fetchone()
+      names = [session.get('username','')]
+      if employee and employee.get('full_name'):
+        names.append(employee['full_name'])
+      placeholders = ','.join(['%s'] * len(names))
+      db.execute(f"SELECT employee,course,filename,expiry_date FROM training WHERE employee IN ({placeholders}) ORDER BY course", tuple(names))
+      rows = db.fetchall()
+  finally:
+    conn.close()
+  today = date.today()
+  html = "<div class='table-wrap'><table><thead><tr><th>Course / Training</th><th>Expiry date</th><th>Status</th><th>Certificate</th></tr></thead><tbody>"
+  for r in rows:
+    status = 'No expiry recorded'
+    try:
+      expiry = date.fromisoformat(str(r['expiry_date'])[:10]) if r['expiry_date'] else None
+      if expiry:
+        status = 'Expired' if expiry < today else ('Expiring soon' if expiry <= today + timedelta(days=30) else 'Valid')
+    except ValueError:
+      pass
+    link = f"<a href='/uploads/{quote(r['filename'])}' target='_blank'>View file</a>" if r['filename'] else '—'
+    html += f"<tr><td>{escape(r['course'])}</td><td>{escape(str(r['expiry_date'] or '—'))}</td><td><span class='badge'>{status}</span></td><td>{link}</td></tr>"
+  if not rows:
+    html += "<tr><td colspan='4' class='muted'>No training records matched your account yet. Ask the QSHET administrator to link your training record to your username or employee profile name.</td></tr>"
+  html += "</tbody></table></div>"
+  return page(f"<h2>My Training & Compliance</h2><p class='muted'>This page shows training records linked to your username or employee profile.</p><section class='panel'>{html}</section>")
+
+
+# ---------- PROTÉGÉ SAFETY SUBMISSIONS ----------
+
+@app.route("/submit-safety", methods=["GET", "POST"])
+def submit_safety():
+  if "user_id" not in session:
+    return redirect(url_for("login"))
+  is_admin = session.get("role") == "admin"
+  conn = get_db()
+  try:
+    if request.method == "POST":
+      if is_admin:
+        submission_id = request.form.get('submission_id', type=int)
+        status = request.form.get('status', 'Submitted')
+        response = request.form.get('admin_response', '').strip()
+        if status not in ('Submitted','Under Review','Action Required','Resolved','Closed'):
+          flash('Invalid status.')
+        else:
+          with conn.cursor() as db:
+            db.execute("UPDATE protege_safety_submissions SET status=%s,admin_response=%s WHERE id=%s", (status,response or None,submission_id))
+          conn.commit()
+          log_action('review_protege_safety_submission', f'Submission {submission_id}: {status}')
+          flash('Safety submission updated.')
+        return redirect(url_for('submit_safety'))
+      title = request.form.get('title','').strip()
+      category = request.form.get('category','Other').strip()
+      location = request.form.get('location','').strip()
+      description = request.form.get('description','').strip()
+      file = request.files.get('file')
+      if not title or not description:
+        flash('Title and description are required.')
+        return redirect(url_for('submit_safety'))
+      filename = save_upload(file, 'safety') if file and file.filename else None
+      with conn.cursor() as db:
+        db.execute("INSERT INTO protege_safety_submissions (user_id,title,category,location,description,filename) VALUES (%s,%s,%s,%s,%s,%s)",
+                   (session['user_id'],title,category,location or None,description,filename))
+      conn.commit()
+      log_action('submit_protege_safety_report', title)
+      flash('Safety concern submitted to QSHET.')
+      return redirect(url_for('submit_safety'))
+    with conn.cursor() as db:
+      if is_admin:
+        db.execute("SELECT s.*,u.username FROM protege_safety_submissions s JOIN users u ON u.id=s.user_id ORDER BY s.id DESC")
+      else:
+        db.execute("SELECT s.*,u.username FROM protege_safety_submissions s JOIN users u ON u.id=s.user_id WHERE s.user_id=%s ORDER BY s.id DESC", (session['user_id'],))
+      rows = db.fetchall()
+  finally:
+    conn.close()
+  form = ""
+  if not is_admin:
+    form = "<section class='panel'><h3>Submit a Safety Concern / Hazard</h3><p class='muted'>For emergencies, immediately notify the site supervisor or emergency response team. This form is for recording and follow-up, not emergency response.</p><form method='post' enctype='multipart/form-data'><label>Title</label><input name='title' maxlength='150' required><label>Category</label><select name='category'><option>Hazard</option><option>Near Miss</option><option>Unsafe Act</option><option>Unsafe Condition</option><option>Environmental</option><option>Traffic</option><option>Other</option></select><label>Location / site</label><input name='location' maxlength='180'><label>Description</label><textarea name='description' rows='4' required></textarea><label>Attach photo / document (optional)</label><input type='file' name='file' accept='.pdf,.png,.jpg,.jpeg'><button type='submit'>Submit to QSHET</button></form></section>"
+  table = "<div class='table-wrap'><table><thead><tr><th>Date</th><th>Submitted by</th><th>Concern</th><th>Location</th><th>Status / response</th>"
+  if is_admin: table += "<th>Review</th>"
+  table += "</tr></thead><tbody>"
+  for r in rows:
+    created = r['created_at'].strftime('%d %b %Y %H:%M') if r['created_at'] else '—'
+    file_link = f"<br><a href='/uploads/{quote(r['filename'])}' target='_blank'>Attachment</a>" if r['filename'] else ''
+    status_options = "".join("<option %s>%s</option>" % ("selected" if r['status'] == st else "", st) for st in ['Submitted', 'Under Review', 'Action Required', 'Resolved', 'Closed'])
+    review = f"<form method='post'><input type='hidden' name='submission_id' value='{r['id']}'><select name='status'>{status_options}</select><textarea name='admin_response' rows='2' placeholder='Response / action taken'>{escape(r['admin_response'] or '')}</textarea><button class='btn-sm'>Save</button></form>" if is_admin else ""
+    table += f"<tr><td>{created}</td><td>{escape(r['username'])}</td><td><strong>{escape(r['title'])}</strong> ({escape(r['category'])})<br>{escape(r['description'])}{file_link}</td><td>{escape(r['location'] or '—')}</td><td><span class='badge'>{escape(r['status'])}</span><br>{escape(r['admin_response'] or 'No response yet')}</td>" + (f"<td>{review}</td>" if is_admin else '') + "</tr>"
+  if not rows:
+    table += f"<tr><td colspan='{6 if is_admin else 5}' class='muted'>No submissions yet.</td></tr>"
+  table += "</tbody></table></div>"
+  return page(f"<h2>{'Protégé Safety Inbox' if is_admin else 'Submit Safety Report'}</h2>{form}<section class='panel'><h3>{'All Protégé Submissions' if is_admin else 'My Submissions & Status'}</h3>{table}</section>")
+
+
+# ---------- ANNOUNCEMENTS ----------
+
+@app.route("/announcements", methods=["GET", "POST"])
+def announcements():
+  if "user_id" not in session:
+    return redirect(url_for("login"))
+  is_admin = session.get('role') == 'admin'
+  conn = get_db()
+  try:
+    if request.method == 'POST' and is_admin:
+      action = request.form.get('action','create')
+      if action == 'delete':
+        with conn.cursor() as db:
+          db.execute("DELETE FROM protege_announcements WHERE id=%s", (request.form.get('announcement_id',type=int),))
+        conn.commit()
+        flash('Announcement deleted.')
+        return redirect(url_for('announcements'))
+      title = request.form.get('title','').strip()
+      body = request.form.get('body','').strip()
+      typ = request.form.get('announcement_type','General').strip()
+      due = request.form.get('due_date','').strip() or None
+      if not title or not body:
+        flash('Announcement title and details are required.')
+      else:
+        with conn.cursor() as db:
+          db.execute("INSERT INTO protege_announcements (title,body,announcement_type,due_date,created_by) VALUES (%s,%s,%s,%s,%s)", (title,body,typ,due,session['user_id']))
+        conn.commit()
+        log_action('create_announcement',title)
+        flash('Announcement published.')
+        return redirect(url_for('announcements'))
+    with conn.cursor() as db:
+      db.execute("SELECT a.*,u.username AS author FROM protege_announcements a LEFT JOIN users u ON u.id=a.created_by ORDER BY a.id DESC")
+      rows = db.fetchall()
+  finally:
+    conn.close()
+  form = ""
+  if is_admin:
+    form = "<section class='panel'><h3>Publish Announcement / Reminder</h3><form method='post'><label>Title</label><input name='title' maxlength='180' required><label>Details</label><textarea name='body' rows='4' required></textarea><label>Type</label><select name='announcement_type'><option>General</option><option>Training</option><option>Safety Briefing</option><option>Deadline</option><option>Meeting</option><option>Site Notice</option></select><label>Deadline (optional)</label><input type='date' name='due_date'><button type='submit'>Publish</button></form></section>"
+  cards = ''
+  for r in rows:
+    due = r['due_date'].strftime('%d %b %Y') if r['due_date'] else 'No deadline'
+    created = r['created_at'].strftime('%d %b %Y') if r['created_at'] else ''
+    delete = f"<form method='post' onsubmit=\"return confirm('Delete announcement?')\"><input type='hidden' name='action' value='delete'><input type='hidden' name='announcement_id' value='{r['id']}'><button class='btn-danger btn-sm'>Delete</button></form>" if is_admin else ''
+    cards += f"<article class='panel'><span class='badge'>{escape(r['announcement_type'])}</span><h3>{escape(r['title'])}</h3><p>{escape(r['body'])}</p><p class='muted'>Posted {created} by {escape(r['author'] or 'QSHET Admin')} · {due}</p>{delete}</article>"
+  if not cards: cards = "<section class='panel muted'>No announcements have been published.</section>"
+  return page(f"<h2>Announcements & Reminders</h2>{form}{cards}")
 
 
 @app.route("/manage-cidb", methods=["GET", "POST"])
@@ -1564,6 +2039,14 @@ def manage_cidb():
             if f_path.exists():
               os.remove(f_path)
           db.execute("DELETE FROM cidb_uploads WHERE id = %s", (record_id,))
+        elif action == "review" and record_id:
+          review_status = request.form.get("review_status", "Pending").strip()
+          review_note = request.form.get("review_note", "").strip()
+          if review_status not in ("Pending", "Approved", "Needs Changes"):
+            flash("Invalid document review status.")
+          else:
+            db.execute("UPDATE cidb_uploads SET review_status=%s, review_note=%s, reviewed_at=NOW() WHERE id=%s", (review_status, review_note or None, record_id))
+            log_action("review_cidb_document", f"Document {record_id}: {review_status}")
         elif action == "edit" and record_id:
           title = request.form.get("title", "").strip()
           file = request.files.get("file")
@@ -1574,7 +2057,7 @@ def manage_cidb():
               )
               file.save(app.config["UPLOAD_FOLDER"] / filename)
               db.execute(
-                  "UPDATE cidb_uploads SET title = %s, filename = %s WHERE id = %s",
+                  "UPDATE cidb_uploads SET title = %s, filename = %s, review_status='Pending', review_note=NULL, reviewed_at=NULL WHERE id = %s",
                   (title, filename, record_id),
               )
             else:
@@ -1591,7 +2074,7 @@ def manage_cidb():
   try:
     with conn.cursor() as db:
       db.execute("""
-                SELECT c.id, u.username, c.title, c.filename, c.uploaded_at 
+                SELECT c.id, u.username, c.title, c.filename, c.uploaded_at, c.review_status, c.review_note 
                 FROM cidb_uploads c JOIN users u ON c.user_id = u.id 
                 ORDER BY c.id DESC
             """)
@@ -1602,7 +2085,7 @@ def manage_cidb():
   table_html = (
       "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Protégé"
       " Username</th><th>Title</th><th>File</th><th>Uploaded"
-      " Date</th><th>Actions</th></tr></thead><tbody>"
+      " Date</th><th>Review</th><th>Actions</th></tr></thead><tbody>"
   )
   for r in rows:
     file_link = f'<a href="/uploads/{r["filename"]}" target="_blank">View File</a>'
@@ -1614,6 +2097,19 @@ def manage_cidb():
             <td>{r['title']}</td>
             <td>{file_link}</td>
             <td>{r['uploaded_at']}</td>
+            <td>
+                <form method="post">
+                    <input type="hidden" name="action" value="review">
+                    <input type="hidden" name="record_id" value="{r['id']}">
+                    <select name="review_status">
+                        <option {'selected' if r.get('review_status') == 'Pending' else ''}>Pending</option>
+                        <option {'selected' if r.get('review_status') == 'Approved' else ''}>Approved</option>
+                        <option {'selected' if r.get('review_status') == 'Needs Changes' else ''}>Needs Changes</option>
+                    </select>
+                    <textarea name="review_note" rows="2" placeholder="Review note">{escape(r.get('review_note') or '')}</textarea>
+                    <button class="btn-sm" type="submit">Save Review</button>
+                </form>
+            </td>
             <td>
                 <button type="button" class="btn btn-warning btn-sm" onclick="openEditCidbModal('{r['id']}', '{escaped_title}')">Edit</button>
                 <form method="post" onsubmit="return confirm('Delete this record?');" style="display:inline;">
@@ -1932,7 +2428,13 @@ def employees():
   <label>CIDB number</label><input name='cidb_number' maxlength='100' value='{field('cidb_number')}'>
   <label>CIDB expiry date</label><input type='date' name='cidb_expiry' value='{field('cidb_expiry')}'>
   <label>Status</label><select name='employment_status'><option {selected('Active')}>Active</option><option {selected('Inactive')}>Inactive</option><option {selected('Completed')}>Completed</option></select>
-  <label>Attach Certificate / File (PDF, JPG, PNG)</label><input type='file' name='attachment' accept='.pdf,.jpg,.jpeg,.png'>
+  <label>
+            Attach Certificate / File (Optional)<br>
+            <span style="font-size: 12px; font-weight: normal; color: #7a8c83;">
+                Supported formats: PDF, JPG, PNG
+            </span>
+        </label>
+        <input type="file" name="attachment" accept=".png, .jpg, .jpeg, .pdf">
   {'<p class="muted">An existing attachment will be kept if no new file is selected.</p>' if editing and e.get('filename') else ''}
   <button>{'Save Changes' if editing else 'Add Profile'}</button> {'<a class="btn" href="/employees">Cancel</a>' if editing else ''}</form></section><section class='panel'><h3>Profiles</h3><div class='table-wrap'><table><thead><tr><th>Name</th><th>Staff ID</th><th>Department</th><th>Position</th><th>CIDB No.</th><th>CIDB expiry</th><th>Status</th><th>Actions / Attachment</th></tr></thead><tbody>{tr}</tbody></table></div></section>"""
   return page(content)
@@ -2001,7 +2503,9 @@ def actions():
   <label>Action title</label><input name='title' required maxlength='180' value='{field('title')}'><label>Description</label><textarea name='description' rows='3'>{field('description')}</textarea>
   <label>Source</label><select name='source_type'>{opts('source_type',['Incident','Inspection','Audit','General'],'General')}</select><label>Location / site</label><input name='location' value='{field('location')}'><label>Severity</label><select name='severity'>{opts('severity',['Low','Medium','High','Critical'],'Medium')}</select>
   <label>Person responsible</label><input name='assigned_to' value='{field('assigned_to')}'><label>Due date</label><input type='date' name='due_date' value='{field('due_date')}'><label>Status</label><select name='status'>{opts('status',['Open','In Progress','Resolved','Closed'],'Open')}</select><label>Resolution notes</label><textarea name='resolution_notes' rows='2'>{field('resolution_notes')}</textarea>
-  <label>Attach Certificate / File (PDF, JPG, PNG)</label><input type='file' name='attachment' accept='.pdf,.jpg,.jpeg,.png'><button>{'Save Changes' if editing else 'Add Corrective Action'}</button> {'<a class="btn" href="/actions">Cancel</a>' if editing else ''}</form></section><section class='panel'><h3>Actions register</h3><div class='table-wrap'><table><thead><tr><th>Title</th><th>Source</th><th>Location</th><th>Severity</th><th>Assigned to</th><th>Due date</th><th>Status</th><th>Actions / Attachment</th></tr></thead><tbody>{tr}</tbody></table></div></section>"""
+  <label>Attach Certificate / File (Optional)<br><span style="font-size: 12px; font-weight: normal; color: #7a8c83;">Supported formats: PDF, JPG, PNG</span></label>
+  <input type="file" name="attachment" accept=".png, .jpg, .jpeg, .pdf">
+  <button>{'Save Changes' if editing else 'Save Action'}</button> {'<a class="btn" href="/actions">Cancel</a>' if editing else ''}</form></section><section class='panel'><h3>Corrective Actions</h3><div class='table-wrap'><table><thead><tr><th>Title</th><th>Source</th><th>Location</th><th>Severity</th><th>Assigned To</th><th>Due Date</th><th>Status</th><th>Actions / Attachment</th></tr></thead><tbody>{tr}</tbody></table></div></section>"""
   return page(content)
 
 
@@ -2060,7 +2564,10 @@ def inspections():
   opts = lambda name, values, default: "".join(f"<option {'selected' if e.get(name, default)==v else ''}>{v}</option>" for v in values)
   tr = "".join(f"<tr><td>{escape(str(r['inspection_date'] or ''))}</td><td>{escape(str(r['site_name'] or ''))}</td><td>{escape(str(r['inspector'] or ''))}</td><td>{escape(str(r['checklist_item'] or ''))}</td><td>{escape(str(r['result'] or ''))}</td><td>{escape(str(r['findings'] or '-'))}</td><td>{escape(str(r['assigned_to'] or '-'))}</td><td>{escape(str(r['due_date'] or '-'))}</td><td>{escape(str(r['status'] or ''))}</td><td>{('<a target=\'_blank\' href=\'/uploads/'+quote(str(r['filename']),safe='')+'\'>View file</a> · ') if r.get('filename') else ''}<a class='btn btn-sm' href='/inspections?edit={r['id']}'>Edit</a> <form method='post' style='display:inline' onsubmit=\"return confirm('Delete this inspection?')\"><input type='hidden' name='action' value='delete'><input type='hidden' name='inspection_id' value='{r['id']}'><button class='btn btn-danger btn-sm'>Delete</button></form></td></tr>" for r in rows) or "<tr><td colspan='10'>No inspections recorded yet.</td></tr>"
   content = f"""<h2>Site Inspection Checklist</h2><section class='panel'><h3>{'Edit inspection' if editing else 'Record inspection item'}</h3><form method='post' enctype='multipart/form-data'><input type='hidden' name='action' value="{'edit' if editing else 'add'}"><input type='hidden' name='inspection_id' value="{e.get('id','') if editing else ''}">
-  <label>Site / project</label><input name='site_name' required value='{field('site_name')}'><label>Inspection date</label><input type='date' name='inspection_date' value='{field('inspection_date') or date.today().isoformat()}' required><label>Inspector</label><input name='inspector' required value='{field('inspector')}'><label>Checklist item</label><input name='checklist_item' required value='{field('checklist_item')}'><label>Result</label><select name='result'>{opts('result',['Pass','Fail','Observation','Not Applicable'],'Pass')}</select><label>Findings / notes</label><textarea name='findings' rows='3'>{field('findings')}</textarea><label>Corrective action required</label><textarea name='corrective_action' rows='2'>{field('corrective_action')}</textarea><label>Assigned to</label><input name='assigned_to' value='{field('assigned_to')}'><label>Due date</label><input type='date' name='due_date' value='{field('due_date')}'><label>Status</label><select name='status'>{opts('status',['Open','In Progress','Closed'],'Open')}</select><label>Attach Certificate / File (PDF, JPG, PNG)</label><input type='file' name='attachment' accept='.pdf,.jpg,.jpeg,.png'><button>{'Save Changes' if editing else 'Save Inspection'}</button> {'<a class="btn" href="/inspections">Cancel</a>' if editing else ''}</form></section><section class='panel'><h3>Inspection register</h3><div class='table-wrap'><table><thead><tr><th>Date</th><th>Site</th><th>Inspector</th><th>Checklist item</th><th>Result</th><th>Findings</th><th>Assigned to</th><th>Due date</th><th>Status</th><th>Actions / Attachment</th></tr></thead><tbody>{tr}</tbody></table></div></section>"""
+  <label>Site / project</label><input name='site_name' required value='{field('site_name')}'><label>Inspection date</label><input type='date' name='inspection_date' value='{field('inspection_date') or date.today().isoformat()}' required><label>Inspector</label><input name='inspector' required value='{field('inspector')}'><label>Checklist item</label><input name='checklist_item' required value='{field('checklist_item')}'><label>Result</label><select name='result'>{opts('result',['Pass','Fail','Observation','Not Applicable'],'Pass')}</select><label>Findings / notes</label><textarea name='findings' rows='3'>{field('findings')}</textarea><label>Corrective action required</label><textarea name='corrective_action' rows='2'>{field('corrective_action')}</textarea><label>Assigned to</label><input name='assigned_to' value='{field('assigned_to')}'><label>Due date</label><input type='date' name='due_date' value='{field('due_date')}'><label>Status</label><select name='status'>{opts('status',['Open','In Progress','Closed'],'Open')}</select>
+  <label>Attach Certificate / File (Optional)<br><span style="font-size: 12px; font-weight: normal; color: #7a8c83;">Supported formats: PDF, JPG, PNG</span></label>
+  <input type="file" name="attachment" accept=".png, .jpg, .jpeg, .pdf">
+  <button>{'Save Changes' if editing else 'Save Inspection'}</button> {'<a class="btn" href="/inspections">Cancel</a>' if editing else ''}</form></section><section class='panel'><h3>Inspection register</h3><div class='table-wrap'><table><thead><tr><th>Date</th><th>Site</th><th>Inspector</th><th>Checklist item</th><th>Result</th><th>Findings</th><th>Assigned to</th><th>Due date</th><th>Status</th><th>Actions / Attachment</th></tr></thead><tbody>{tr}</tbody></table></div></section>"""
   return page(content)
 
 
@@ -2069,26 +2576,116 @@ def reports():
   if session.get("role") != "admin":
     flash("Access denied. Admin only.")
     return redirect(url_for("dashboard"))
+    
+  # Get filter selections from query parameters
+  filter_type = request.args.get("filter", "all")
+  start_date = request.args.get("start_date", "")
+  end_date = request.args.get("end_date", "")
+
+  date_condition = "1=1"
+  params = []
+  today = date.today()
+
+  if filter_type == "week":
+    start_date_val = today - timedelta(days=7)
+    date_condition = "created_at >= %s"
+    params = [start_date_val]
+  elif filter_type == "month":
+    start_date_val = today - timedelta(days=30)
+    date_condition = "created_at >= %s"
+    params = [start_date_val]
+  elif filter_type == "custom" and start_date and end_date:
+    date_condition = "created_at BETWEEN %s AND %s"
+    params = [start_date, end_date + " 23:59:59"]
+
   conn = get_db()
   try:
     with conn.cursor() as db:
-      db.execute("SELECT status, COUNT(*) AS total FROM safety_reports GROUP BY status"); safety_counts = db.fetchall()
-      db.execute("SELECT COUNT(*) AS total FROM corrective_actions WHERE status NOT IN ('Resolved','Closed')"); open_actions = db.fetchone()["total"]
-      db.execute("SELECT COUNT(*) AS total FROM inspections WHERE result IN ('Fail','Observation')"); inspection_issues = db.fetchone()["total"]
-      db.execute("SELECT id, username, action, details, created_at FROM audit_logs ORDER BY id DESC LIMIT 100"); logs = db.fetchall()
+      db.execute("SELECT status, COUNT(*) AS total FROM safety_reports GROUP BY status")
+      safety_counts = db.fetchall()
+      
+      db.execute("SELECT COUNT(*) AS total FROM corrective_actions WHERE status NOT IN ('Resolved','Closed')")
+      open_actions = db.fetchone()["total"]
+      
+      db.execute("SELECT COUNT(*) AS total FROM inspections WHERE result IN ('Fail','Observation')")
+      inspection_issues = db.fetchone()["total"]
+
+      log_query = f"SELECT id, username, action, details, created_at FROM audit_logs WHERE {date_condition} ORDER BY id DESC LIMIT 200"
+      db.execute(log_query, params)
+      logs = db.fetchall()
+
       db.execute("SELECT expiry_date AS expiry FROM training WHERE expiry_date IS NOT NULL AND expiry_date <> '' UNION ALL SELECT review_date AS expiry FROM documents WHERE review_date IS NOT NULL AND review_date <> ''")
       dates = db.fetchall()
-  finally: conn.close()
-  today = date.today(); soon = today + timedelta(days=30); expired = 0; expiring = 0
+  finally: 
+    conn.close()
+
+  soon = today + timedelta(days=30)
+  expired = 0
+  expiring = 0
   for row in dates:
     try:
       d = date.fromisoformat(str(row["expiry"])[:10])
       if d < today: expired += 1
       elif d <= soon: expiring += 1
-    except (ValueError, TypeError): pass
+    except (ValueError, TypeError): 
+      pass
+
   safety_html = "".join(f"<li>{r['status']}: <strong>{r['total']}</strong></li>" for r in safety_counts) or "<li>No safety reports.</li>"
-  logs_html = "".join(f"<tr><td>{r['created_at']}</td><td>{r['username'] or 'System'}</td><td>{r['action']}</td><td>{r['details'] or '-'}</td></tr>" for r in logs) or "<tr><td colspan='4'>No audit entries yet.</td></tr>"
-  content = f"""<h2>Reports & Audit Log</h2><div class='cards'><div class='card'>Expired training/document dates<div class='number'>{expired}</div></div><div class='card'>Due within 30 days<div class='number'>{expiring}</div></div><div class='card'>Open corrective actions<div class='number'>{open_actions}</div></div><div class='card'>Inspection findings<div class='number'>{inspection_issues}</div></div></div><section class='panel'><h3>Safety report status</h3><ul>{safety_html}</ul><p class='muted'>Use the browser's Print option to save this page as PDF. Date alerts are based on existing date fields; check source records for invalid legacy dates.</p><button onclick='window.print()'>Print / Save PDF</button></section><section class='panel'><h3>Recent audit activity (last 100)</h3><div class='table-wrap'><table><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead><tbody>{logs_html}</tbody></table></div></section>"""
+  logs_html = "".join(f"<tr><td>{r['created_at']}</td><td>{r['username'] or 'System'}</td><td>{r['action']}</td><td>{r['details'] or '-'}</td></tr>" for r in logs) or "<tr><td colspan='4'>No audit entries found for this period.</td></tr>"
+
+  filter_form_html = f"""
+    <section class='panel'>
+      <h3>Filter Audit Log & Reports</h3>
+      <form method='get' action='/reports' style='display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;'>
+        <div>
+          <label style='margin-bottom:4px;'>View Mode</label>
+          <select name='filter' onchange='this.form.submit()' style='padding: 8px; border-radius: 8px;'>
+            <option value='all' {'selected' if filter_type=='all' else ''}>All Time</option>
+            <option value='week' {'selected' if filter_type=='week' else ''}>Past Week (Weekly Summary)</option>
+            <option value='month' {'selected' if filter_type=='month' else ''}>Past Month (Monthly Summary)</option>
+            <option value='custom' {'selected' if filter_type=='custom' else ''}>Custom Date Range</option>
+          </select>
+        </div>
+        <div id='custom_dates' style='display: {'flex' if filter_type=='custom' else 'none'}; gap: 10px; align-items: flex-end;'>
+          <div>
+            <label style='margin-bottom:4px;'>Start Date</label>
+            <input type='date' name='start_date' value='{start_date}' style='padding: 6px;'>
+          </div>
+          <div>
+            <label style='margin-bottom:4px;'>End Date</label>
+            <input type='date' name='end_date' value='{end_date}' style='padding: 6px;'>
+          </div>
+          <button type='submit' class='btn btn-sm' style='margin-top: 0;'>Apply</button>
+        </div>
+      </form>
+    </section>
+  """
+
+  content = f"""
+    <h2>Reports & Audit Log</h2>
+    {filter_form_html}
+    <div class='cards'>
+      <div class='card'>Expired training/document dates<div class='number'>{expired}</div></div>
+      <div class='card'>Due within 30 days<div class='number'>{expiring}</div></div>
+      <div class='card'>Open corrective actions<div class='number'>{open_actions}</div></div>
+      <div class='card'>Inspection findings<div class='number'>{inspection_issues}</div></div>
+    </div>
+    <section class='panel'>
+      <h3>Safety report status</h3>
+      <ul>{safety_html}</ul>
+      <p class='muted'>Use the browser's Print option to save this page as PDF. Date alerts are based on existing date fields; check source records for invalid legacy dates.</p>
+      <button onclick='window.print()'>Print / Save PDF</button>
+    </section>
+    <section class='panel'>
+      <h3>Audit Activity Log</h3>
+      <div class='table-wrap'>
+        <table>
+          <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead>
+          <tbody>{logs_html}</tbody>
+        </table>
+      </div>
+    </section>
+  """
   return page(content)
 
 
@@ -2104,6 +2701,18 @@ def uploaded_file(filename):
     with conn.cursor() as db:
       db.execute("SELECT id FROM cidb_uploads WHERE filename = %s AND user_id = %s", (filename, session["user_id"]))
       allowed = db.fetchone()
+      if not allowed:
+        db.execute("SELECT id FROM protege_safety_submissions WHERE filename = %s AND user_id = %s", (filename, session["user_id"]))
+        allowed = db.fetchone()
+      if not allowed:
+        db.execute("SELECT full_name FROM employees WHERE user_id=%s LIMIT 1", (session["user_id"],))
+        employee = db.fetchone()
+        names = [session.get("username", "")]
+        if employee and employee.get("full_name"):
+          names.append(employee["full_name"])
+        placeholders = ",".join(["%s"] * len(names))
+        db.execute(f"SELECT id FROM training WHERE filename=%s AND employee IN ({placeholders})", (filename, *names))
+        allowed = db.fetchone()
   finally:
     conn.close()
   if not allowed:
