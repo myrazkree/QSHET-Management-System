@@ -1775,7 +1775,6 @@ def documents():
     """
   return page(content)
 
-
 # ---------- 4. TRAINING & COMPLIANCE (Admin Only) ----------
 
 
@@ -1851,54 +1850,81 @@ def training():
   conn = get_db()
   try:
     with conn.cursor() as db:
+      # Query training records and attempt to join user role via employees or users table
       db.execute(
-          "SELECT id, employee, course, filename, expiry_date FROM training"
-          " ORDER BY id DESC"
+          """
+            SELECT t.id, t.employee, t.course, t.filename, t.expiry_date, u.role
+            FROM training t
+            LEFT JOIN users u ON (t.employee = u.username)
+            ORDER BY t.id DESC
+          """
       )
       rows = db.fetchall()
   finally:
     conn.close()
 
-  table_html = (
-      "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Employee</th><th>Course</th><th>File</th><th>Expiry"
-      " Date</th><th>Action</th></tr></thead><tbody>"
-  )
+  # Categorize records into Protégé vs Staff
+  protege_trainings = []
+  staff_trainings = []
+
   for r in rows:
-    file_link = (
-        f'<a href="/uploads/{r["filename"]}" target="_blank">View File</a>'
-        if r["filename"]
-        else "-"
+    emp_str = (r.get("employee") or "").lower()
+    role_str = (r.get("role") or "").lower()
+
+    if "protege" in emp_str or "protégé" in emp_str or role_str == "protege":
+      protege_trainings.append(r)
+    else:
+      staff_trainings.append(r)
+
+  def build_training_table(filtered_rows):
+    t_html = (
+        "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Employee"
+        " Name / Staff ID</th><th>Training"
+        " Course</th><th>File</th><th>Expiry"
+        " Date</th><th>Action</th></tr></thead><tbody>"
     )
-    escaped_emp = r["employee"].replace("'", "\\'")
-    escaped_crs = r["course"].replace("'", "\\'")
-    e_date = r["expiry_date"] or ""
+    if filtered_rows:
+      for r in filtered_rows:
+        file_link = (
+            f'<a href="/uploads/{r["filename"]}" target="_blank">View File</a>'
+            if r["filename"]
+            else "-"
+        )
+        escaped_emp = r["employee"].replace("'", "\\'")
+        escaped_crs = r["course"].replace("'", "\\'")
+        e_date = r["expiry_date"] or ""
 
-    menu_id = f"train_menu_{r['id']}"
-    menu_items = f"""
-        <button type="button" onclick="openEditTrainingModal('{r['id']}', '{escaped_emp}', '{escaped_crs}', '{e_date}')">
-            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
-        </button>
-        <form method="post" onsubmit="return confirm('Delete this record?');" style="margin:0;">
-            <input type="hidden" name="action" value="delete">
-            <input type="hidden" name="train_id" value="{r['id']}">
-            <button type="submit" class="text-danger">
-                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+        menu_id = f"train_menu_{r['id']}"
+        menu_items = f"""
+            <button type="button" onclick="openEditTrainingModal('{r['id']}', '{escaped_emp}', '{escaped_crs}', '{e_date}')">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
             </button>
-        </form>
-    """
-    actions_td = action_menu_html(menu_id, menu_items)
-
-    table_html += f"""
-        <tr>
-            <td>{r['id']}</td>
-            <td>{r['employee']}</td>
-            <td>{r['course']}</td>
-            <td>{file_link}</td>
-            <td>{r['expiry_date'] or '-'}</td>
-            <td>{actions_td}</td>
-        </tr>
+            <form method="post" onsubmit="return confirm('Delete this record?');" style="margin:0;">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="train_id" value="{r['id']}">
+                <button type="submit" class="text-danger">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+                </button>
+            </form>
         """
-  table_html += "</tbody></table></div>"
+        actions_td = action_menu_html(menu_id, menu_items)
+
+        t_html += f"""
+            <tr>
+                <td>{r['id']}</td>
+                <td>{r['employee']}</td>
+                <td>{r['course']}</td>
+                <td>{file_link}</td>
+                <td>{r['expiry_date'] or '-'}</td>
+                <td>{actions_td}</td>
+            </tr>
+            """
+    else:
+      t_html += (
+          "<tr><td colspan='6' class='muted'>No training records found.</td></tr>"
+      )
+    t_html += "</tbody></table></div>"
+    return t_html
 
   content = f"""
     <h2>Training & Compliance</h2>
@@ -1906,7 +1932,7 @@ def training():
     <h3>Add Training Record</h3>
     <form method="post" enctype="multipart/form-data">
         <label>Employee Name or Staff ID</label>
-        <input name="employee" required maxlength="100">
+        <input name="employee" required maxlength="100" placeholder="e.g., Nur Amira Najwa (PROTÉGÉ-001)">
         <label>Training Course</label>
         <input name="course" required maxlength="150">
         <label>Certificate Expiry Date</label>
@@ -1921,12 +1947,16 @@ def training():
         <button type="submit">Save Training Record</button>
     </form>
     </section>
-    <section class="panel"><h3>Training Records</h3>
-    {table_html}
+    <section class="panel">
+        <h3>Protégé Training Records</h3>
+        {build_training_table(protege_trainings)}
+    </section>
+    <section class="panel">
+        <h3>Staff Training Records</h3>
+        {build_training_table(staff_trainings)}
     </section>
     """
   return page(content)
-
 
 # ---------- 5. USER / PROTÉGÉ CIDB RECORDS (User / Admin) ----------
 
@@ -3228,8 +3258,20 @@ def employees():
     t_html += "</tbody></table></div>"
     return t_html
 
-  protege_profiles = [r for r in rows if r.get('role') == 'protege']
-  staff_profiles = [r for r in rows if r.get('role') != 'protege']
+  # AFTER (Flexible check matching Position title or User Role or Staff ID):
+  protege_profiles = []
+  staff_profiles = []
+
+  for r in rows:
+    pos = (r.get('position') or '').lower()
+    role = (r.get('role') or '').lower()
+    staff_id = (r.get('staff_id') or '').upper()
+
+    # Detect if record represents a Protégé
+    if 'protege' in pos or 'protégé' in pos or role == 'protege' or staff_id.startswith('PROTÉGÉ') or staff_id.startswith('PROTEGE'):
+        protege_profiles.append(r)
+    else:
+        staff_profiles.append(r)
 
   content = f"""
     <h2>Staff & Protégé Profiles</h2>
