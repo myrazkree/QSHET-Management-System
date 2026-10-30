@@ -1,3 +1,8 @@
+# QSHET Management System - Improved Version
+# Built additively from qshetms(4).py. Existing modules, routes, role names,
+# database tables, and user workflows are intentionally retained.
+# Review deployment environment variables before running in production.
+
 from datetime import date, datetime, timedelta
 import os
 import secrets
@@ -69,6 +74,9 @@ DB_CONFIG = {
     "charset": "utf8mb4",
     "cursorclass": pymysql.cursors.DictCursor,
     "connect_timeout": 10,
+    "read_timeout": 30,
+    "write_timeout": 30,
+    "autocommit": False,
 }
 
 
@@ -306,26 +314,62 @@ def init_db():
             (os.environ.get("INITIAL_ADMIN_USERNAME", "admin"), admin_pass),
         )
 
+      # Additive indexes for common departmental lookups. Existing records and
+      # table structures are preserved.
+      index_specs = {
+          "idx_safety_status_created": ("safety_reports", "status, created_at"),
+          "idx_documents_review_date": ("documents", "review_date"),
+          "idx_training_expiry_date": ("training", "expiry_date"),
+          "idx_cidb_user": ("cidb_uploads", "user_id"),
+          "idx_actions_status_due": ("corrective_actions", "status, due_date"),
+          "idx_actions_source": ("corrective_actions", "source_type, source_id"),
+          "idx_inspections_result_due": ("inspections", "result, due_date"),
+          "idx_tasks_user_status_due": ("protege_tasks", "user_id, status, due_date"),
+          "idx_worklogs_user_date": ("protege_work_logs", "user_id, activity_date"),
+      }
+      for index_name, (table_name, columns) in index_specs.items():
+        cursor.execute(f"SHOW INDEX FROM `{table_name}` WHERE Key_name = %s", (index_name,))
+        if not cursor.fetchone():
+          cursor.execute(f"CREATE INDEX `{index_name}` ON `{table_name}` ({columns})")
+
     conn.commit()
+  except Exception:
+    conn.rollback()
+    app.logger.exception("Database initialisation or additive index check failed")
+    raise
   finally:
     conn.close()
 
 
 def log_action(action, details=""):
-  """Write a simple audit entry without interrupting the user's main action."""
+  """Record an auditable action with request context, preserving the existing schema."""
   try:
+    metadata = []
+    if request:
+      metadata.extend([
+          f"route={request.endpoint or 'unknown'}",
+          f"method={request.method}",
+          f"ip={request.remote_addr or 'unknown'}",
+      ])
+    if details:
+      metadata.append(str(details))
+    audit_details = " | ".join(metadata)[:4000]
     conn = get_db()
     try:
       with conn.cursor() as db:
         db.execute(
           "INSERT INTO audit_logs (user_id, username, action, details) VALUES (%s, %s, %s, %s)",
-          (session.get("user_id"), session.get("username"), action, str(details)[:4000]),
+          (session.get("user_id"), session.get("username"), str(action)[:100], audit_details),
         )
       conn.commit()
+    except Exception:
+      conn.rollback()
+      raise
     finally:
       conn.close()
   except Exception:
-    app.logger.exception("Could not write audit log")
+    # Audit failure is logged for operators; it does not hide the primary action result.
+    app.logger.exception("Could not write audit log for action %s", action)
 
 
 def save_upload(file, prefix="file"):
@@ -1441,10 +1485,7 @@ def safety():
 
           if title and category in ["Incident", "Inspection", "Hazard"]:
             if file and file.filename and valid_upload_file(file):
-              filename = secure_filename(
-                  f"safety_{date.today().isoformat()}_{file.filename}"
-              )
-              file.save(app.config["UPLOAD_FOLDER"] / filename)
+              filename = save_upload(file, "safety")
               db.execute(
                   """
                                 UPDATE safety_reports 
@@ -1472,10 +1513,7 @@ def safety():
           if title and category in ["Incident", "Inspection", "Hazard"]:
             filename = None
             if file and file.filename and valid_upload_file(file):
-              filename = secure_filename(
-                  f"safety_{date.today().isoformat()}_{file.filename}"
-              )
-              file.save(app.config["UPLOAD_FOLDER"] / filename)
+              filename = save_upload(file, "safety")
 
             db.execute(
                 """
@@ -1624,10 +1662,7 @@ def documents():
 
           if title and doc_type:
             if file and file.filename and valid_upload_file(file):
-              filename = secure_filename(
-                  f"doc_{date.today().isoformat()}_{file.filename}"
-              )
-              file.save(app.config["UPLOAD_FOLDER"] / filename)
+              filename = save_upload(file, "document")
               db.execute(
                   """
                                 UPDATE documents 
@@ -1652,10 +1687,7 @@ def documents():
           if title and doc_type:
             filename = None
             if file and file.filename and valid_upload_file(file):
-              filename = secure_filename(
-                  f"doc_{date.today().isoformat()}_{file.filename}"
-              )
-              file.save(app.config["UPLOAD_FOLDER"] / filename)
+              filename = save_upload(file, "document")
 
             db.execute(
                 """
@@ -1787,10 +1819,7 @@ def training():
 
           if employee and course:
             if file and file.filename and valid_upload_file(file):
-              filename = secure_filename(
-                  f"train_{date.today().isoformat()}_{file.filename}"
-              )
-              file.save(app.config["UPLOAD_FOLDER"] / filename)
+              filename = save_upload(file, "training")
               db.execute(
                   """
                                 UPDATE training 
@@ -1815,10 +1844,7 @@ def training():
           if employee and course:
             filename = None
             if file and file.filename and valid_upload_file(file):
-              filename = secure_filename(
-                  f"train_{date.today().isoformat()}_{file.filename}"
-              )
-              file.save(app.config["UPLOAD_FOLDER"] / filename)
+              filename = save_upload(file, "training")
 
             db.execute(
                 """
@@ -1957,10 +1983,7 @@ def my_cidb():
           title = request.form.get("title", "").strip()
           if title:
             if file and file.filename and valid_upload_file(file):
-              filename = secure_filename(
-                  f"cidb_{session['username']}_{date.today().isoformat()}_{file.filename}"
-              )
-              file.save(app.config["UPLOAD_FOLDER"] / filename)
+              filename = save_upload(file, "cidb")
               if role == "admin":
                 db.execute(
                     "UPDATE cidb_uploads SET title = %s, filename = %s WHERE id = %s",
@@ -1985,10 +2008,7 @@ def my_cidb():
         else:
           title = request.form.get("title", "").strip()
           if title and file and file.filename and valid_upload_file(file):
-            filename = secure_filename(
-                f"cidb_{session['username']}_{date.today().isoformat()}_{file.filename}"
-            )
-            file.save(app.config["UPLOAD_FOLDER"] / filename)
+            filename = save_upload(file, "cidb")
 
             db.execute(
                 """
@@ -2618,10 +2638,7 @@ def manage_cidb():
           file = request.files.get("file")
           if title:
             if file and file.filename and valid_upload_file(file):
-              filename = secure_filename(
-                  f"cidb_admin_{date.today().isoformat()}_{file.filename}"
-              )
-              file.save(app.config["UPLOAD_FOLDER"] / filename)
+              filename = save_upload(file, "cidb_admin")
               db.execute(
                   "UPDATE cidb_uploads SET title = %s, filename = %s, review_status='Pending', review_note=NULL, reviewed_at=NULL WHERE id = %s",
                   (title, filename, record_id),
@@ -3249,8 +3266,16 @@ def reports():
     date_condition = "created_at >= %s"
     params = [start_date_val]
   elif filter_type == "custom" and start_date and end_date:
-    date_condition = "created_at BETWEEN %s AND %s"
-    params = [start_date, end_date + " 23:59:59"]
+    try:
+      parsed_start = date.fromisoformat(start_date)
+      parsed_end = date.fromisoformat(end_date)
+      if parsed_end < parsed_start:
+        raise ValueError("End date must not be earlier than start date.")
+      date_condition = "created_at BETWEEN %s AND %s"
+      params = [parsed_start.isoformat(), parsed_end.isoformat() + " 23:59:59"]
+    except ValueError:
+      flash("Please provide a valid date range.")
+      filter_type, start_date, end_date = "all", "", ""
 
   conn = get_db()
   try:
@@ -3284,8 +3309,17 @@ def reports():
     except (ValueError, TypeError): 
       pass
 
-  safety_html = "".join(f"<li>{r['status']}: <strong>{r['total']}</strong></li>" for r in safety_counts) or "<li>No safety reports.</li>"
-  logs_html = "".join(f"<tr><td>{r['created_at']}</td><td>{r['username'] or 'System'}</td><td>{r['action']}</td><td>{r['details'] or '-'}</td></tr>" for r in logs) or "<tr><td colspan='4'>No audit entries found for this period.</td></tr>"
+  safety_html = "".join(
+      f"<li>{escape(r['status'] or '')}: <strong>{int(r['total'] or 0)}</strong></li>"
+      for r in safety_counts
+  ) or "<li>No safety reports.</li>"
+  logs_html = "".join(
+      f"<tr><td>{escape(r['created_at'] or '')}</td>"
+      f"<td>{escape(r['username'] or 'System')}</td>"
+      f"<td>{escape(r['action'] or '')}</td>"
+      f"<td>{escape(r['details'] or '-')}</td></tr>"
+      for r in logs
+  ) or "<tr><td colspan='4'>No audit entries found for this period.</td></tr>"
 
   filter_form_html = f"""
     <section class='panel'>
@@ -3345,6 +3379,11 @@ def reports():
 
 @app.route("/uploads/<filename>")
 def uploaded_file(filename):
+  # Never accept path components from the URL, even though send_from_directory
+  # also applies safe path handling.
+  filename = Path(str(filename or "")).name
+  if not filename or filename in {".", ".."}:
+    return "Invalid file name", 400
   if "user_id" not in session:
     return redirect(url_for("login"))
   # Admin can view stored files. Protégés can only access files attached to their own CIDB records.
@@ -3652,6 +3691,20 @@ def qshet_alerts():
     """
     return page(content)
 
+
+@app.errorhandler(413)
+def qshet_file_too_large(_error):
+  flash("The selected file is larger than the 10 MB upload limit.")
+  return ("The selected file is too large. Maximum upload size is 10 MB.", 413)
+
+
+@app.errorhandler(500)
+def qshet_internal_error(error):
+  # Do not expose database details, filesystem paths, or stack traces to users.
+  app.logger.error("Unhandled QSHET application error: %s", error, exc_info=True)
+  return ("An unexpected system error occurred. Please contact the QSHET administrator.", 500)
+
+
 if __name__ == "__main__":
   init_db()
-  app.run(debug=os.environ.get("FLASK_DEBUG", "0") == "1", host="127.0.0.1", port=int(os.environ.get("PORT", "5000")))
+  app.run(debug=os.environ.get("FLASK_DEBUG", "0") == "1", host=os.environ.get("FLASK_HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "5000")))
