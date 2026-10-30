@@ -134,7 +134,7 @@ def init_db():
                 ) ENGINE=InnoDB;
             """)
 
-      # CIDB / Protege Document Uploads table
+      # CIDB / User Document Uploads table
       cursor.execute("""
                 CREATE TABLE IF NOT EXISTS cidb_uploads (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -146,7 +146,7 @@ def init_db():
                 ) ENGINE=InnoDB;
             """)
 
-      # Employees table
+      # Employees / Staff table
       cursor.execute("""
         CREATE TABLE IF NOT EXISTS employees (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -216,7 +216,7 @@ def init_db():
         ) ENGINE=InnoDB;
       """)
 
-      # Protégé tasks assigned by an administrator
+      # Tasks assigned by an administrator (for Protégés and Staff)
       cursor.execute("""
         CREATE TABLE IF NOT EXISTS protege_tasks (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -235,7 +235,7 @@ def init_db():
         ) ENGINE=InnoDB;
       """)
 
-      # Protégé work diary / weekly activity log
+      # Work diary / weekly activity log (for Protégés and Staff)
       cursor.execute("""
         CREATE TABLE IF NOT EXISTS protege_work_logs (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -253,7 +253,7 @@ def init_db():
         ) ENGINE=InnoDB;
       """)
 
-      # Safety submissions made by Protégés, separate from admin-managed safety records
+      # Safety submissions made by Users, separate from admin-managed safety records
       cursor.execute("""
         CREATE TABLE IF NOT EXISTS protege_safety_submissions (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -284,7 +284,7 @@ def init_db():
         ) ENGINE=InnoDB;
       """)
 
-      # Add review metadata to existing Protégé document uploads
+      # Add review metadata to document uploads
       for col, definition in [
           ("review_status", "VARCHAR(30) NOT NULL DEFAULT 'Pending'"),
           ("review_note", "TEXT NULL"),
@@ -353,7 +353,9 @@ def log_action(action, details=""):
       ])
     if details:
       metadata.append(str(details))
-    audit_details = " | ".join(metadata)[:4000]
+    
+    audit_details = " — ".join(metadata)[:4000]
+    
     conn = get_db()
     try:
       with conn.cursor() as db:
@@ -368,7 +370,6 @@ def log_action(action, details=""):
     finally:
       conn.close()
   except Exception:
-    # Audit failure is logged for operators; it does not hide the primary action result.
     app.logger.exception("Could not write audit log for action %s", action)
 
 
@@ -411,11 +412,27 @@ header p { margin: 0; color: #c2d4cb; }
 .user-info { text-align: right; font-size: 14px; }
 .user-info a { color: #e8c580; text-decoration: none; font-weight: bold; }
 nav {
-    background: #ffffff; padding: 14px 5%;
-    display: flex; flex-wrap: wrap; gap: 18px;
+    background: #ffffff; 
+    padding: 14px 5%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
+    gap: 18px;
     border-bottom: 1px solid #e8e3d8;
+    align-items: center;
 }
-nav a { color: #3b6251; text-decoration: none; font-weight: bold; }
+nav a { 
+    color: #3b6251; 
+    text-decoration: none; 
+    font-weight: bold;
+    text-align: center;
+}
+nav a:hover {
+    color: #e8c580;
+    text-decoration: underline;
+}
+nav a:active {
+    color: #183b35;
+}
 main { max-width: 1100px; margin: 28px auto; padding: 0 18px; flex: 1; }
 .cards {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;
@@ -437,7 +454,7 @@ main { max-width: 1100px; margin: 28px auto; padding: 0 18px; flex: 1; }
     border-radius: 12px; margin-bottom: 18px;
     box-shadow: 0 4px 16px rgba(45, 74, 62, 0.05);
     border: 1px solid #eef2f0;
-    overflow: visible !important; /* Prevents action menu clipping and inner scrolls */
+    overflow: visible !important;
 }
 .number { font-size: 30px; font-weight: bold; color: #3b6251; }
 label { display: block; margin-top: 12px; font-weight: bold; color: #43544c; }
@@ -460,23 +477,16 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; }
 th, td { padding: 11px; border-bottom: 1px solid #ebece8; text-align: left; }
 .clickable-row { cursor: pointer; transition: background 0.2s; }
 .clickable-row:hover { background: #f0f4f2; }
-
-/* Table wrap with no internal vertical scroll and visible overflow for dropdowns */
 .table-wrap { width: 100%; overflow-x: auto; overflow-y: visible !important; }
-
 .badge { background: #e3ece8; color: #2d4a3e; padding: 5px 8px; border-radius: 20px; font-weight: 600; }
 .muted { color: #7a8c83; }
 .alert { background: #fbf0ee; color: #8a332d; padding: 12px 16px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #c85a54; }
-
-/* Footer Styling */
 footer {
     background: #1e382c; color: #b0c4ba; text-align: center;
     padding: 16px 5%; margin-top: 40px; font-size: 13px;
     border-top: 3px solid #2d4a3e;
 }
 footer strong { color: #e8c580; }
-
-/* Password Eye Icon Styling */
 .password-container {
     position: relative;
     width: 100%;
@@ -495,14 +505,10 @@ footer strong { color: #e8c580; }
     width: 22px; height: 22px; stroke: currentColor;
     stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round;
 }
-
-/* Password Strength Indicator Styles */
 .strength-meter { margin-top: 6px; font-size: 13px; font-weight: bold; }
 .text-weak { color: #c85a54; }
 .text-moderate { color: #dfa85b; }
 .text-strong { color: #52826e; }
-
-/* 3-Dot Action Menu Styling */
 .action-menu-container {
     position: relative;
     display: inline-block;
@@ -571,8 +577,6 @@ footer strong { color: #e8c580; }
 .action-dropdown button.text-danger:hover, .action-dropdown a.text-danger:hover {
     background: #fbf0ee;
 }
-
-/* Modal Styles for Enlarging Data / Editing */
 .modal-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(30, 56, 44, 0.4); display: none; justify-content: center; align-items: center;
@@ -608,29 +612,30 @@ footer strong { color: #e8c580; }
     </div>
 </header>
 <nav>
-    <a href="/">Dashboard</a>
+    <a href="/">Dashboard</a> 
     {% if session.get('role') == 'admin' %}
-        <a href="/safety">Safety Reports</a>
-        <a href="/documents">Document Records</a>
-        <a href="/training">Training & Compliance</a>
-        <a href="/manage-cidb">All Protege CIDB Records</a>
-        <a href="/manage-users">Manage Users & Passwords</a>
-        <a href="/employees">Employee Profiles</a>
-        <a href="/actions">Corrective Actions</a>
-        <a href="/inspections">Site Inspections</a>
-        <a href="/reports">Reports & Audit Log</a>
-        <a href="/alerts">QSHET Alerts</a>
-        <a href="/tasks">Protégé Tasks</a>
-        <a href="/work-log">Protégé Work Logs</a>
-        <a href="/submit-safety">Protégé Safety Inbox</a>
+        <a href="/safety">Safety Reports</a>  
+        <a href="/documents">Document Records</a>  
+        <a href="/training">Training & Compliance</a>  
+        <a href="/manage-cidb">All User CIDB Records</a>  
+        <a href="/manage-users">Manage Users & Passwords</a>  
+        <a href="/employees">Staff & Protégé Profiles</a>  
+        <a href="/actions">Corrective Actions</a>  
+        <a href="/inspections">Site Inspections</a>  
+        <a href="/reports">Reports & Audit Log</a>  
+        <a href="/alerts">QSHET Alerts </a>  
+        <a href="/tasks">Tasks</a>  
+        <a href="/work-log">Work Logs</a>  
+        <a href="/submit-safety">Safety Inbox</a>  
         <a href="/announcements">Announcements</a>
-    {% elif session.get('role') == 'protege' %}
-        <a href="/my-tasks">My Tasks</a>
-        <a href="/my-training">My Training</a>
-        <a href="/work-log">My Work Log</a>
-        <a href="/submit-safety">Submit Safety Report</a>
-        <a href="/announcements">Announcements</a>
-        <a href="/my-cidb">My CIDB Documents</a>
+    {% elif session.get('role') == 'protege' or session.get('role') == 'staff' %}
+        <a href="/my-profile">My Profile</a>  
+        <a href="/my-tasks">My Tasks</a>  
+        <a href="/my-training">My Training</a>  
+        <a href="/work-log">My Work Log</a>  
+        <a href="/submit-safety">Submit Safety Report</a>  
+        <a href="/announcements">Announcements</a>  
+        <a href="/my-cidb">My Documents</a> 
     {% endif %}
 </nav>
 <main>
@@ -752,7 +757,7 @@ footer strong { color: #e8c580; }
 <div id="editCidbModal" class="modal-overlay" onclick="closeModalOverlay(event, 'editCidbModal')">
     <div class="modal-content" onclick="event.stopPropagation()">
         <span class="modal-close" onclick="closeModalDirect('editCidbModal')">&times;</span>
-        <h3 style="margin-top:0; color:#183b35;">Edit Protégé CIDB Record</h3>
+        <h3 style="margin-top:0; color:#183b35;">Edit User CIDB Record</h3>
         <form method="POST" enctype="multipart/form-data">
             <input type="hidden" name="action" value="edit">
             <input type="hidden" id="edit_cidb_id" name="record_id">
@@ -778,7 +783,7 @@ footer strong { color: #e8c580; }
             <input type="hidden" name="action" value="edit">
             <input type="hidden" id="edit_task_id" name="task_id">
             
-            <label>Protégé</label>
+            <label>User / Assignee</label>
             <select id="edit_task_user_id" name="user_id" required>
                 <!-- populated dynamically -->
             </select>
@@ -966,33 +971,6 @@ window.addEventListener('click', function() {
     });
 });
 
-function checkPasswordStrength(password) {
-    const indicator = document.getElementById("strength-indicator");
-    if (!indicator) return;
-
-    if (password.length === 0) {
-        indicator.textContent = "";
-        return;
-    }
-
-    let score = 0;
-    if (password.length >= 8) score++;
-    if (/[A-Za-z]/.test(password)) score++;
-    if (/\\d/.test(password)) score++;
-    if (/[^A-Za-z0-9]/.test(password)) score++;
-
-    if (score <= 2) {
-        indicator.textContent = "Strength: Weak ❌ (Needs letters, numbers & symbols)";
-        indicator.className = "strength-meter text-weak";
-    } else if (score === 3) {
-        indicator.textContent = "Strength: Moderate ⚠️ (Add a mix of symbols or length)";
-        indicator.className = "strength-meter text-moderate";
-    } else {
-        indicator.textContent = "Strength: Strong ✅";
-        indicator.className = "strength-meter text-strong";
-    }
-}
-
 function showReportDetails(id, title, category, description, filename, status, created_at) {
     const modalBody = document.getElementById('modalBody');
     modalBody.replaceChildren();
@@ -1129,7 +1107,6 @@ function openEditSafetySubModal(id, title, category, location, description) {
     document.getElementById('editSafetySubModal').style.display = 'flex';
 }
 
-// Toggle Custom Dates visibility for reports filter
 document.addEventListener('DOMContentLoaded', function() {
     const filterSelect = document.querySelector('select[name="filter"]');
     if (filterSelect) {
@@ -1284,13 +1261,20 @@ def dashboard():
   if "user_id" not in session:
     return redirect(url_for("login"))
 
-  # Protégés see only their own records and assigned work.
   if session.get("role") != "admin":
+    role = session.get("role", "staff")
     conn = get_db()
     try:
       with conn.cursor() as db:
         db.execute("SELECT COUNT(*) AS cnt FROM cidb_uploads WHERE user_id = %s", (session["user_id"],))
         my_docs = db.fetchone()["cnt"]
+
+        my_tasks = 0
+        overdue_tasks = 0
+        my_logs = 0
+        pending_docs = 0
+        task_rows = []
+
         db.execute("SELECT COUNT(*) AS cnt FROM protege_tasks WHERE user_id=%s AND status NOT IN ('Completed','Cancelled')", (session["user_id"],))
         my_tasks = db.fetchone()["cnt"]
         db.execute("SELECT COUNT(*) AS cnt FROM protege_tasks WHERE user_id=%s AND status NOT IN ('Completed','Cancelled') AND due_date IS NOT NULL AND due_date < CURDATE()", (session["user_id"],))
@@ -1301,10 +1285,20 @@ def dashboard():
         pending_docs = db.fetchone()["cnt"]
         db.execute("SELECT id,title,priority,due_date,status FROM protege_tasks WHERE user_id=%s ORDER BY CASE WHEN status='Completed' THEN 1 ELSE 0 END, due_date IS NULL, due_date ASC, id DESC LIMIT 5", (session["user_id"],))
         task_rows = db.fetchall()
+
         db.execute("SELECT id,title,announcement_type,due_date,created_at FROM protege_announcements ORDER BY id DESC LIMIT 5")
         announcement_rows = db.fetchall()
     finally:
       conn.close()
+
+    ann_html = "<ul>"
+    if announcement_rows:
+      for item in announcement_rows:
+        due = item['due_date'].strftime('%d %b %Y') if item['due_date'] else 'No deadline'
+        ann_html += f"<li><strong>{escape(item['title'])}</strong> — {escape(item['announcement_type'])} <span class='muted'>({due})</span></li>"
+    else:
+      ann_html += "<li class='muted'>No announcements yet.</li>"
+    ann_html += "</ul>"
 
     task_html = "<div class='table-wrap'><table><thead><tr><th>Task</th><th>Priority</th><th>Due date</th><th>Status</th></tr></thead><tbody>"
     if task_rows:
@@ -1314,17 +1308,11 @@ def dashboard():
     else:
       task_html += "<tr><td colspan='4' class='muted'>No tasks assigned yet.</td></tr>"
     task_html += "</tbody></table></div>"
-    ann_html = "<ul>"
-    if announcement_rows:
-      for item in announcement_rows:
-        due = item['due_date'].strftime('%d %b %Y') if item['due_date'] else 'No deadline'
-        ann_html += f"<li><strong>{escape(item['title'])}</strong> — {escape(item['announcement_type'])} <span class='muted'>({due})</span></li>"
-    else:
-      ann_html += "<li class='muted'>No announcements yet.</li>"
-    ann_html += "</ul>"
+
+    role_title = "Protégé" if role == "protege" else "Staff"
     content = f"""
-      <h2>Protégé Dashboard</h2>
-      <p class="muted">Welcome, {escape(session.get('username', 'Protégé') or 'Protégé')}. Your personal QSHET workspace.</p>
+      <h2>{role_title} Dashboard</h2>
+      <p class="muted">Welcome, {escape(session.get('username', role_title) or role_title)}. Your personal QSHET workspace.</p>
       <div class="cards">
         <a href="/my-tasks" class="card">My Open Tasks<div class="number">{my_tasks}</div></a>
         <a href="/my-cidb" class="card">My Documents<div class="number">{my_docs}</div></a>
@@ -1335,6 +1323,7 @@ def dashboard():
       <section class="panel"><h3>My Recent Tasks</h3>{task_html}<a class="btn" href="/my-tasks">View all tasks</a></section>
       <section class="panel"><h3>Latest Announcements</h3>{ann_html}<a class="btn" href="/announcements">View announcements</a></section>
       <section class="panel"><h3>Quick Actions</h3>
+        <a class="btn" href="/my-profile">My Profile</a>
         <a class="btn" href="/work-log">Add Work Log</a>
         <a class="btn" href="/submit-safety">Submit Safety Report</a>
         <a class="btn" href="/my-cidb">Upload / Check Documents</a>
@@ -1939,7 +1928,7 @@ def training():
   return page(content)
 
 
-# ---------- 5. PROTÉGÉ CIDB RECORDS (Protege / Admin) ----------
+# ---------- 5. USER / PROTÉGÉ CIDB RECORDS (User / Admin) ----------
 
 
 @app.route("/my-cidb", methods=["GET", "POST"])
@@ -2074,7 +2063,7 @@ def my_cidb():
   table_html += "</tbody></table></div>"
 
   content = f"""
-    <h2>My CIDB & Protégé Documents</h2>
+    <h2>My CIDB Documents & Compliance Files</h2>
     <section class="panel">
     <h3>Upload New Document / CIDB Card</h3>
     <form method="post" enctype="multipart/form-data">
@@ -2097,7 +2086,108 @@ def my_cidb():
   return page(content)
 
 
-# ---------- PROTÉGÉ WORKSPACE: TASKS ----------
+# ---------- MY PROFILE ROUTE ----------
+
+@app.route("/my-profile", methods=["GET", "POST"])
+def my_profile():
+  if "user_id" not in session:
+    return redirect(url_for("login"))
+  
+  if session.get("role") == "admin":
+    return redirect(url_for("employees"))
+
+  user_id = session["user_id"]
+  conn = get_db()
+  try:
+    with conn.cursor() as db:
+      db.execute("SELECT * FROM employees WHERE user_id = %s LIMIT 1", (user_id,))
+      profile = db.fetchone()
+
+      if request.method == "POST":
+        full_name = request.form.get("full_name", "").strip()
+        if not full_name:
+          flash("Full name is required.")
+        else:
+          staff_id = request.form.get("staff_id", "").strip() or None
+          department = request.form.get("department", "").strip() or None
+          position = request.form.get("position", "").strip() or None
+          cidb_number = request.form.get("cidb_number", "").strip() or None
+          cidb_expiry = request.form.get("cidb_expiry", "").strip() or None
+          
+          try:
+            new_file = save_upload(request.files.get("attachment"), "my_profile")
+          except ValueError as exc:
+            flash(str(exc))
+            return redirect(url_for("my_profile"))
+
+          if profile:
+            filename = new_file or profile.get("filename")
+            db.execute(
+                """UPDATE employees 
+                   SET full_name=%s, staff_id=%s, department=%s, position=%s, cidb_number=%s, cidb_expiry=%s, filename=%s 
+                   WHERE user_id=%s""",
+                (full_name, staff_id, department, position, cidb_number, cidb_expiry, filename, user_id)
+            )
+            conn.commit()
+            if new_file and profile.get("filename"):
+              try: (app.config["UPLOAD_FOLDER"] / profile["filename"]).unlink(missing_ok=True)
+              except OSError: pass
+          else:
+            db.execute(
+                """INSERT INTO employees (user_id, full_name, staff_id, department, position, cidb_number, cidb_expiry, employment_status, filename) 
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, 'Active', %s)""",
+                (user_id, full_name, staff_id, department, position, cidb_number, cidb_expiry, new_file)
+            )
+            conn.commit()
+
+          log_action("update_my_profile", f"User {user_id} updated personal profile")
+          flash("Your profile has been updated successfully.")
+          return redirect(url_for("my_profile"))
+  finally:
+    conn.close()
+
+  p = profile or {}
+  field = lambda name: escape(str(p.get(name) or ""))
+  file_link = f"<p>Current attachment: <a target='_blank' href='/uploads/{quote(str(p.get('filename')), safe='')}'>View file</a></p>" if p.get('filename') else ""
+
+  content = f"""
+    <h2>My Profile</h2>
+    <p class="muted">View and update your personal personnel details, department placement, and CIDB information.</p>
+    <section class="panel" style="max-width: 600px; margin: auto;">
+      <form method="post" enctype="multipart/form-data">
+        <label>Full Name</label>
+        <input name="full_name" required maxlength="150" value="{field('full_name')}">
+        
+        <label>Staff ID</label>
+        <input name="staff_id" maxlength="80" value="{field('staff_id')}" placeholder="e.g., EMP-001 or PRO-001">
+        
+        <label>Department</label>
+        <input name="department" maxlength="100" value="{field('department')}" placeholder="e.g., QSHET Department">
+        
+        <label>Position / Role Title</label>
+        <input name="position" maxlength="100" value="{field('position')}" placeholder="e.g., Protégé Trainee / Safety Officer">
+        
+        <label>CIDB Green Card Number</label>
+        <input name="cidb_number" maxlength="100" value="{field('cidb_number')}">
+        
+        <label>CIDB Expiry Date</label>
+        <input type="date" name="cidb_expiry" value="{field('cidb_expiry')}">
+        
+        <label>
+            Attach / Update Certificate / ID Card (Optional)<br>
+            <span style="font-size: 12px; font-weight: normal; color: #7a8c83;">Supported formats: PDF, JPG, PNG</span>
+        </label>
+        <input type="file" name="attachment" accept=".png, .jpg, .jpeg, .pdf">
+        {file_link}
+        
+        <button type="submit" class="btn" style="margin-top: 15px;">Save Profile Changes</button>
+      </form>
+    </section>
+  """
+  return page(content)
+
+
+# ---------- USER WORKSPACE: TASKS ----------
 
 @app.route("/my-tasks", methods=["GET", "POST"])
 def my_tasks():
@@ -2156,7 +2246,7 @@ def tasks():
         with conn.cursor() as db:
           db.execute("DELETE FROM protege_tasks WHERE id=%s", (task_id,))
         conn.commit()
-        log_action("delete_protege_task", f"Task {task_id}")
+        log_action("delete_user_task", f"Task {task_id}")
         flash("Task deleted.")
         return redirect(url_for("tasks"))
       elif action == "edit":
@@ -2173,7 +2263,7 @@ def tasks():
             db.execute("UPDATE protege_tasks SET user_id=%s, title=%s, description=%s, priority=%s, due_date=%s WHERE id=%s",
                        (user_id, title, description or None, priority, due_raw, task_id))
           conn.commit()
-          log_action("edit_protege_task", f"Updated task {task_id}")
+          log_action("edit_user_task", f"Updated task {task_id}")
           flash("Task updated successfully.")
           return redirect(url_for("tasks"))
       
@@ -2183,55 +2273,95 @@ def tasks():
       priority = request.form.get("priority", "Normal")
       due_raw = request.form.get("due_date", "").strip()
       if not user_id or not title:
-        flash("Select a Protégé and enter a task title.")
+        flash("Select a user and enter a task title.")
       else:
         with conn.cursor() as db:
-          db.execute("SELECT id FROM users WHERE id=%s AND role='protege'", (user_id,))
+          db.execute("SELECT id FROM users WHERE id=%s AND role IN ('protege', 'staff')", (user_id,))
           target = db.fetchone()
           if not target:
-            flash("Selected account is not a Protégé.")
+            flash("Selected account is not a valid Protégé or Staff member.")
           else:
             db.execute("INSERT INTO protege_tasks (user_id,title,description,priority,due_date,created_by) VALUES (%s,%s,%s,%s,%s,%s)",
                        (user_id,title,description or None,priority,due_raw or None,session.get('user_id')))
             conn.commit()
-            log_action("create_protege_task", f"Assigned task '{title}' to user {user_id}")
+            log_action("create_user_task", f"Assigned task '{title}' to user {user_id}")
             flash("Task assigned successfully.")
             return redirect(url_for("tasks"))
     with conn.cursor() as db:
-      db.execute("SELECT id,username FROM users WHERE role='protege' ORDER BY username")
+      db.execute("SELECT id,username,role FROM users WHERE role IN ('protege','staff') ORDER BY role, username")
       users = db.fetchall()
-      db.execute("SELECT t.*,u.username FROM protege_tasks t JOIN users u ON u.id=t.user_id ORDER BY t.id DESC")
+      db.execute("SELECT t.*,u.username,u.role FROM protege_tasks t JOIN users u ON u.id=t.user_id ORDER BY t.id DESC")
       rows = db.fetchall()
   finally:
     conn.close()
-  user_options = "".join(f"<option value='{u['id']}'>{escape(u['username'])}</option>" for u in users)
-  table = "<div class='table-wrap'><table><thead><tr><th>Protégé</th><th>Task</th><th>Priority</th><th>Due</th><th>Status</th><th>Action</th></tr></thead><tbody>"
-  for r in rows:
-    due = r['due_date'].strftime('%d %b %Y') if r['due_date'] else '—'
-    due_iso = r['due_date'].strftime('%Y-%m-%d') if r['due_date'] else ''
-    escaped_title = (r['title'] or '').replace("'", "\\'")
-    escaped_desc = (r['description'] or '').replace("'", "\\'").replace("\n", " ")
-    
-    menu_id = f"task_menu_{r['id']}"
-    menu_items = f"""
-        <button type="button" onclick="openEditTaskModal('{r['id']}', '{r['user_id']}', '{escaped_title}', '{escaped_desc}', '{r['priority']}', '{due_iso}')">
-            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
-        </button>
-        <form method='post' onsubmit="return confirm('Delete this task?')" style="margin:0;">
-            <input type='hidden' name='action' value='delete'>
-            <input type='hidden' name='task_id' value='{r['id']}'>
-            <button type="submit" class="text-danger">
-                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+  user_options = "".join(f"<option value='{u['id']}'>{escape(u['username'])} ({escape(u['role'].capitalize())})</option>" for u in users)
+
+  def build_task_table(filtered_rows):
+    t_html = "<div class='table-wrap'><table><thead><tr><th>Assignee</th><th>Task</th><th>Priority</th><th>Due</th><th>Status</th><th>Action</th></tr></thead><tbody>"
+    if filtered_rows:
+      for r in filtered_rows:
+        due = r['due_date'].strftime('%d %b %Y') if r['due_date'] else '—'
+        due_iso = r['due_date'].strftime('%Y-%m-%d') if r['due_date'] else ''
+        escaped_title = (r['title'] or '').replace("'", "\\'")
+        escaped_desc = (r['description'] or '').replace("'", "\\'").replace("\n", " ")
+        menu_id = f"task_menu_{r['id']}"
+        menu_items = f"""
+            <button type="button" onclick="openEditTaskModal('{r['id']}', '{r['user_id']}', '{escaped_title}', '{escaped_desc}', '{r['priority']}', '{due_iso}')">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
             </button>
-        </form>
-    """
-    actions_td = action_menu_html(menu_id, menu_items)
-    table += f"<tr><td>{escape(r['username'])}</td><td>{escape(r['title'])}<br><span class='muted'>{escape(r['description'] or '')}</span></td><td>{escape(r['priority'])}</td><td>{due}</td><td>{escape(r['status'])}</td><td>{actions_td}</td></tr>"
-  table += "</tbody></table></div>"
-  return page(f"<h2>Protégé Task Management</h2><section class='panel'><h3>Assign a Task</h3><form method='post'><label>Protégé</label><select name='user_id' required>{user_options}</select><label>Task title</label><input name='title' maxlength='180' required><label>Description / expected output</label><textarea name='description' rows='3'></textarea><label>Priority</label><select name='priority'><option>Low</option><option selected>Normal</option><option>High</option><option>Urgent</option></select><label>Due date</label><input type='date' name='due_date'><button type='submit'>Assign Task</button></form></section><section class='panel'><h3>All Assigned Tasks</h3>{table}</section>")
+            <form method='post' onsubmit="return confirm('Delete this task?')" style="margin:0;">
+                <input type='hidden' name='action' value='delete'>
+                <input type='hidden' name='task_id' value='{r['id']}'>
+                <button type="submit" class="text-danger">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+                </button>
+            </form>
+        """
+        actions_td = action_menu_html(menu_id, menu_items)
+        t_html += f"<tr><td>{escape(r['username'])}</td><td>{escape(r['title'])}<br><span class='muted'>{escape(r['description'] or '')}</span></td><td>{escape(r['priority'])}</td><td>{due}</td><td>{escape(r['status'])}</td><td>{actions_td}</td></tr>"
+    else:
+      t_html += "<tr><td colspan='6' class='muted'>No tasks assigned.</td></tr>"
+    t_html += "</tbody></table></div>"
+    return t_html
+
+  protege_tasks = [r for r in rows if r.get('role') == 'protege']
+  staff_tasks = [r for r in rows if r.get('role') == 'staff']
+
+  return page(f"""
+    <h2>Task Management (Protégés & Staff)</h2>
+    <section class='panel'>
+      <h3>Assign a Task</h3>
+      <form method='post'>
+        <label>Assignee (Protégé or Staff)</label>
+        <select name='user_id' required>{user_options}</select>
+        <label>Task title</label>
+        <input name='title' maxlength='180' required>
+        <label>Description / expected output</label>
+        <textarea name='description' rows='3'></textarea>
+        <label>Priority</label>
+        <select name='priority'>
+          <option>Low</option>
+          <option selected>Normal</option>
+          <option>High</option>
+          <option>Urgent</option>
+        </select>
+        <label>Due date</label>
+        <input type='date' name='due_date'>
+        <button type='submit'>Assign Task</button>
+      </form>
+    </section>
+    <section class='panel'>
+      <h3>Protégé Tasks</h3>
+      {build_task_table(protege_tasks)}
+    </section>
+    <section class='panel'>
+      <h3>Staff Tasks</h3>
+      {build_task_table(staff_tasks)}
+    </section>
+  """)
 
 
-# ---------- PROTÉGÉ WORK DIARY ----------
+# ---------- WORK DIARY ----------
 
 @app.route("/work-log", methods=["GET", "POST"])
 def work_log():
@@ -2281,7 +2411,7 @@ def work_log():
         return redirect(url_for("work_log"))
 
       if is_admin:
-        flash("Admins can review logs here; Protégés submit their own logs from their account.")
+        flash("Admins can review logs here; users submit their own logs from their account.")
         return redirect(url_for("work_log"))
       activity_date = request.form.get("activity_date", "").strip()
       title = request.form.get("activity_title", "").strip()
@@ -2307,47 +2437,67 @@ def work_log():
       return redirect(url_for("work_log"))
     with conn.cursor() as db:
       if is_admin:
-        db.execute("SELECT l.*,u.username FROM protege_work_logs l JOIN users u ON u.id=l.user_id ORDER BY l.activity_date DESC,l.id DESC")
+        db.execute("SELECT l.*,u.username,u.role FROM protege_work_logs l JOIN users u ON u.id=l.user_id ORDER BY l.activity_date DESC,l.id DESC")
       else:
-        db.execute("SELECT l.*,u.username FROM protege_work_logs l JOIN users u ON u.id=l.user_id WHERE l.user_id=%s ORDER BY l.activity_date DESC,l.id DESC", (session['user_id'],))
+        db.execute("SELECT l.*,u.username,u.role FROM protege_work_logs l JOIN users u ON u.id=l.user_id WHERE l.user_id=%s ORDER BY l.activity_date DESC,l.id DESC", (session['user_id'],))
       rows = db.fetchall()
   finally:
     conn.close()
-  table = "<div class='table-wrap'><table><thead><tr><th>Date</th><th>Protégé</th><th>Activity</th><th>Skills learned</th><th>Hours</th><th>Review</th><th>Action</th></tr></thead><tbody>"
-  for r in rows:
-    d = r['activity_date'].strftime('%d %b %Y') if r['activity_date'] else '—'
-    d_iso = r['activity_date'].strftime('%Y-%m-%d') if r['activity_date'] else ''
-    escaped_title = (r['activity_title'] or '').replace("'", "\\'")
-    escaped_desc = (r['description'] or '').replace("'", "\\'").replace("\n", " ")
-    escaped_skills = (r['skills_learned'] or '').replace("'", "\\'").replace("\n", " ")
-    escaped_chal = (r['challenges'] or '').replace("'", "\\'").replace("\n", " ")
-    hours_val = r['hours_spent'] if r['hours_spent'] is not None else ''
 
-    menu_id = f"worklog_menu_{r['id']}"
-    menu_items = f"""
-        <button type="button" onclick="openEditWorkLogModal('{r['id']}', '{d_iso}', '{escaped_title}', '{escaped_desc}', '{escaped_skills}', '{escaped_chal}', '{hours_val}')">
-            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
-        </button>
-        <form method='post' onsubmit="return confirm('Delete this work log?')" style="margin:0;">
-            <input type='hidden' name='action' value='delete'>
-            <input type='hidden' name='log_id' value='{r['id']}'>
-            <button type="submit" class="text-danger">
-                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+  def build_worklog_table(filtered_rows):
+    t_html = "<div class='table-wrap'><table><thead><tr><th>Date</th><th>User</th><th>Activity</th><th>Skills learned</th><th>Hours</th><th>Review</th><th>Action</th></tr></thead><tbody>"
+    if filtered_rows:
+      for r in filtered_rows:
+        d = r['activity_date'].strftime('%d %b %Y') if r['activity_date'] else '—'
+        d_iso = r['activity_date'].strftime('%Y-%m-%d') if r['activity_date'] else ''
+        escaped_title = (r['activity_title'] or '').replace("'", "\\'")
+        escaped_desc = (r['description'] or '').replace("'", "\\'").replace("\n", " ")
+        escaped_skills = (r['skills_learned'] or '').replace("'", "\\'").replace("\n", " ")
+        escaped_chal = (r['challenges'] or '').replace("'", "\\'").replace("\n", " ")
+        hours_val = r['hours_spent'] if r['hours_spent'] is not None else ''
+
+        menu_id = f"worklog_menu_{r['id']}"
+        menu_items = f"""
+            <button type="button" onclick="openEditWorkLogModal('{r['id']}', '{d_iso}', '{escaped_title}', '{escaped_desc}', '{escaped_skills}', '{escaped_chal}', '{hours_val}')">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
             </button>
-        </form>
+            <form method='post' onsubmit="return confirm('Delete this work log?')" style="margin:0;">
+                <input type='hidden' name='action' value='delete'>
+                <input type='hidden' name='log_id' value='{r['id']}'>
+                <button type="submit" class="text-danger">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+                </button>
+            </form>
+        """
+        actions_td = action_menu_html(menu_id, menu_items)
+        t_html += f"<tr><td>{d}</td><td>{escape(r['username'])}</td><td><strong>{escape(r['activity_title'])}</strong><br>{escape(r['description'] or '')}<br><span class='muted'>Challenges: {escape(r['challenges'] or '—')}</span></td><td>{escape(r['skills_learned'] or '—')}</td><td>{escape(str(r['hours_spent']) if r['hours_spent'] is not None else '—')}</td><td>{escape(r['status'])}{('<br>'+escape(r['supervisor_feedback'])) if r['supervisor_feedback'] else ''}</td><td>{actions_td}</td></tr>"
+    else:
+      t_html += "<tr><td colspan='7' class='muted'>No work logs submitted.</td></tr>"
+    t_html += "</tbody></table></div>"
+    return t_html
+
+  if is_admin:
+    protege_logs = [r for r in rows if r.get('role') == 'protege']
+    staff_logs = [r for r in rows if r.get('role') == 'staff']
+    content = f"""
+      <h2>Work Logs (Protégés & Staff)</h2>
+      <section class='panel'>
+        <h3>Protégé Work Logs</h3>
+        {build_worklog_table(protege_logs)}
+      </section>
+      <section class='panel'>
+        <h3>Staff Work Logs</h3>
+        {build_worklog_table(staff_logs)}
+      </section>
     """
-    actions_td = action_menu_html(menu_id, menu_items)
-    table += f"<tr><td>{d}</td><td>{escape(r['username'])}</td><td><strong>{escape(r['activity_title'])}</strong><br>{escape(r['description'] or '')}<br><span class='muted'>Challenges: {escape(r['challenges'] or '—')}</span></td><td>{escape(r['skills_learned'] or '—')}</td><td>{escape(str(r['hours_spent']) if r['hours_spent'] is not None else '—')}</td><td>{escape(r['status'])}{('<br>'+escape(r['supervisor_feedback'])) if r['supervisor_feedback'] else ''}</td><td>{actions_td}</td></tr>"
-  if not rows:
-    table += "<tr><td colspan='7' class='muted'>No work logs submitted yet.</td></tr>"
-  table += "</tbody></table></div>"
-  form = ""
-  if not is_admin:
+    return page(content)
+  else:
     form = f"<section class='panel'><h3>Submit Work Log</h3><form method='post'><label>Activity date</label><input type='date' name='activity_date' value='{date.today().isoformat()}' required><label>Activity / task title</label><input name='activity_title' maxlength='180' required><label>What did you do?</label><textarea name='description' rows='3'></textarea><label>Skills or knowledge learned</label><textarea name='skills_learned' rows='2'></textarea><label>Challenges / follow-up needed</label><textarea name='challenges' rows='2'></textarea><label>Hours spent (optional)</label><input type='number' name='hours_spent' min='0' max='24' step='0.25'><button type='submit'>Submit Work Log</button></form></section>"
-  return page(f"<h2>{'Protégé Work Logs' if is_admin else 'My Daily / Weekly Work Log'}</h2><p class='muted'>{'All Protégé submissions.' if is_admin else 'Record your activities, what you learned, and any follow-up needed.'}</p>{form}<section class='panel'><h3>{'Submitted Logs' if is_admin else 'My Submitted Logs'}</h3>{table}</section>")
+    table = build_worklog_table(rows)
+    return page(f"<h2>My Daily / Weekly Work Log</h2><p class='muted'>Record your activities, what you learned, and any follow-up needed.</p>{form}<section class='panel'><h3>My Submitted Logs</h3>{table}</section>")
 
 
-# ---------- PROTÉGÉ TRAINING VIEW ----------
+# ---------- TRAINING VIEW ----------
 
 @app.route("/my-training")
 def my_training():
@@ -2386,7 +2536,7 @@ def my_training():
   return page(f"<h2>My Training & Compliance</h2><p class='muted'>This page shows training records linked to your username or employee profile.</p><section class='panel'>{html}</section>")
 
 
-# ---------- PROTÉGÉ SAFETY SUBMISSIONS ----------
+# ---------- SAFETY SUBMISSIONS ----------
 
 @app.route("/submit-safety", methods=["GET", "POST"])
 def submit_safety():
@@ -2455,7 +2605,7 @@ def submit_safety():
           with conn.cursor() as db:
             db.execute("UPDATE protege_safety_submissions SET status=%s,admin_response=%s WHERE id=%s", (status,response or None,submission_id))
           conn.commit()
-          log_action('review_protege_safety_submission', f'Submission {submission_id}: {status}')
+          log_action('review_user_safety_submission', f'Submission {submission_id}: {status}')
           flash('Safety submission updated.')
         return redirect(url_for('submit_safety'))
       title = request.form.get('title','').strip()
@@ -2471,53 +2621,70 @@ def submit_safety():
         db.execute("INSERT INTO protege_safety_submissions (user_id,title,category,location,description,filename) VALUES (%s,%s,%s,%s,%s,%s)",
                    (session['user_id'],title,category,location or None,description,filename))
       conn.commit()
-      log_action('submit_protege_safety_report', title)
+      log_action('submit_user_safety_report', title)
       flash('Safety concern submitted to QSHET.')
       return redirect(url_for('submit_safety'))
     with conn.cursor() as db:
       if is_admin:
-        db.execute("SELECT s.*,u.username FROM protege_safety_submissions s JOIN users u ON u.id=s.user_id ORDER BY s.id DESC")
+        db.execute("SELECT s.*,u.username,u.role FROM protege_safety_submissions s JOIN users u ON u.id=s.user_id ORDER BY s.id DESC")
       else:
-        db.execute("SELECT s.*,u.username FROM protege_safety_submissions s JOIN users u ON u.id=s.user_id WHERE s.user_id=%s ORDER BY s.id DESC", (session['user_id'],))
+        db.execute("SELECT s.*,u.username,u.role FROM protege_safety_submissions s JOIN users u ON u.id=s.user_id WHERE s.user_id=%s ORDER BY s.id DESC", (session['user_id'],))
       rows = db.fetchall()
   finally:
     conn.close()
-  form = ""
-  if not is_admin:
-    form = "<section class='panel'><h3>Submit a Safety Concern / Hazard</h3><p class='muted'>For emergencies, immediately notify the site supervisor or emergency response team. This form is for recording and follow-up, not emergency response.</p><form method='post' enctype='multipart/form-data'><label>Title</label><input name='title' maxlength='150' required><label>Category</label><select name='category'><option>Hazard</option><option>Near Miss</option><option>Unsafe Act</option><option>Unsafe Condition</option><option>Environmental</option><option>Traffic</option><option>Other</option></select><label>Location / site</label><input name='location' maxlength='180'><label>Description</label><textarea name='description' rows='4' required></textarea><label>Attach photo / document (optional)</label><input type='file' name='file' accept='.pdf,.png,.jpg,.jpeg'><button type='submit'>Submit to QSHET</button></form></section>"
-  table = "<div class='table-wrap'><table><thead><tr><th>Date</th><th>Submitted by</th><th>Concern</th><th>Location</th><th>Status / response</th>"
-  if is_admin: table += "<th>Review</th>"
-  table += "<th>Action</th></tr></thead><tbody>"
-  for r in rows:
-    created = r['created_at'].strftime('%d %b %Y %H:%M') if r['created_at'] else '—'
-    file_link = f"<br><a href='/uploads/{quote(r['filename'])}' target='_blank'>Attachment</a>" if r['filename'] else ''
-    status_options = "".join("<option %s>%s</option>" % ("selected" if r['status'] == st else "", st) for st in ['Submitted', 'Under Review', 'Action Required', 'Resolved', 'Closed'])
-    review = f"<form method='post'><input type='hidden' name='submission_id' value='{r['id']}'><select name='status'>{status_options}</select><textarea name='admin_response' rows='2' placeholder='Response / action taken'>{escape(r['admin_response'] or '')}</textarea><button class='btn-sm'>Save</button></form>" if is_admin else ""
-    
-    escaped_title = (r['title'] or '').replace("'", "\\'")
-    escaped_loc = (r['location'] or '').replace("'", "\\'")
-    escaped_desc = (r['description'] or '').replace("'", "\\'").replace("\n", " ")
 
-    menu_id = f"safetysub_menu_{r['id']}"
-    menu_items = f"""
-        <button type="button" onclick="openEditSafetySubModal('{r['id']}', '{escaped_title}', '{r['category']}', '{escaped_loc}', '{escaped_desc}')">
-            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
-        </button>
-        <form method='post' onsubmit="return confirm('Delete this safety submission?')" style="margin:0;">
-            <input type='hidden' name='action' value='delete'>
-            <input type='hidden' name='submission_id' value='{r['id']}'>
-            <button type="submit" class="text-danger">
-                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+  def build_safety_table(filtered_rows):
+    t_html = "<div class='table-wrap'><table><thead><tr><th>Date</th><th>Submitted by</th><th>Concern</th><th>Location</th><th>Status / response</th>"
+    if is_admin: t_html += "<th>Review</th>"
+    t_html += "<th>Action</th></tr></thead><tbody>"
+    if filtered_rows:
+      for r in filtered_rows:
+        created = r['created_at'].strftime('%d %b %Y %H:%M') if r['created_at'] else '—'
+        file_link = f"<br><a href='/uploads/{quote(r['filename'])}' target='_blank'>Attachment</a>" if r['filename'] else ''
+        status_options = "".join("<option %s>%s</option>" % ("selected" if r['status'] == st else "", st) for st in ['Submitted', 'Under Review', 'Action Required', 'Resolved', 'Closed'])
+        review = f"<form method='post'><input type='hidden' name='submission_id' value='{r['id']}'><select name='status'>{status_options}</select><textarea name='admin_response' rows='2' placeholder='Response / action taken'>{escape(r['admin_response'] or '')}</textarea><button class='btn-sm'>Save</button></form>" if is_admin else ""
+        escaped_title = (r['title'] or '').replace("'", "\\'")
+        escaped_loc = (r['location'] or '').replace("'", "\\'")
+        escaped_desc = (r['description'] or '').replace("'", "\\'").replace("\n", " ")
+        menu_id = f"safetysub_menu_{r['id']}"
+        menu_items = f"""
+            <button type="button" onclick="openEditSafetySubModal('{r['id']}', '{escaped_title}', '{r['category']}', '{escaped_loc}', '{escaped_desc}')">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
             </button>
-        </form>
-    """
-    actions_td = action_menu_html(menu_id, menu_items)
+            <form method='post' onsubmit="return confirm('Delete this safety submission?')" style="margin:0;">
+                <input type='hidden' name='action' value='delete'>
+                <input type='hidden' name='submission_id' value='{r['id']}'>
+                <button type="submit" class="text-danger">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+                </button>
+            </form>
+        """
+        actions_td = action_menu_html(menu_id, menu_items)
+        t_html += f"<tr><td>{created}</td><td>{escape(r['username'])}</td><td><strong>{escape(r['title'])}</strong> ({escape(r['category'])})<br>{escape(r['description'])}{file_link}</td><td>{escape(r['location'] or '—')}</td><td><span class='badge'>{escape(r['status'])}</span><br>{escape(r['admin_response'] or 'No response yet')}</td>" + (f"<td>{review}</td>" if is_admin else '') + f"<td>{actions_td}</td></tr>"
+    else:
+      t_html += f"<tr><td colspan='{(7 if is_admin else 6)}' class='muted'>No submissions.</td></tr>"
+    t_html += "</tbody></table></div>"
+    return t_html
 
-    table += f"<tr><td>{created}</td><td>{escape(r['username'])}</td><td><strong>{escape(r['title'])}</strong> ({escape(r['category'])})<br>{escape(r['description'])}{file_link}</td><td>{escape(r['location'] or '—')}</td><td><span class='badge'>{escape(r['status'])}</span><br>{escape(r['admin_response'] or 'No response yet')}</td>" + (f"<td>{review}</td>" if is_admin else '') + f"<td>{actions_td}</td></tr>"
-  if not rows:
-    table += f"<tr><td colspan='{(7 if is_admin else 6)}' class='muted'>No submissions yet.</td></tr>"
-  table += "</tbody></table></div>"
-  return page(f"<h2>{'Protégé Safety Inbox' if is_admin else 'Submit Safety Report'}</h2>{form}<section class='panel'><h3>{'All Protégé Submissions' if is_admin else 'My Submissions & Status'}</h3>{table}</section>")
+  if is_admin:
+    protege_subs = [r for r in rows if r.get('role') == 'protege']
+    staff_subs = [r for r in rows if r.get('role') == 'staff']
+    content = f"""
+      <h2>Safety Inbox (Protégés & Staff)</h2>
+      <section class='panel'>
+        <h3>Protégé Submissions</h3>
+        {build_safety_table(protege_subs)}
+      </section>
+      <section class='panel'>
+        <h3>Staff Submissions</h3>
+        {build_safety_table(staff_subs)}
+      </section>
+    """
+    return page(content)
+  else:
+    form = "<section class='panel'><h3>Submit a Safety Concern / Hazard</h3><p class='muted'>For emergencies, immediately notify the site supervisor or emergency response team. This form is for recording and follow-up, not emergency response.</p><form method='post' enctype='multipart/form-data'><label>Title</label><input name='title' maxlength='150' required><label>Category</label><select name='category'><option>Hazard</option><option>Near Miss</option><option>Unsafe Act</option><option>Unsafe Condition</option><option>Environmental</option><option>Traffic</option><option>Other</option></select><label>Location / site</label><input name='location' maxlength='180'><label>Description</label><textarea name='description' rows='4' required></textarea><label>Attach photo / document (optional)</label><input type='file' name='file' accept='.pdf,.png,.jpg,.jpeg'><button type='submit'>Submit to QSHET</button></form></section>"
+    table = build_safety_table(rows)
+    return page(f"<h2>Submit Safety Report</h2>{form}<section class='panel'><h3>My Submissions & Status</h3>{table}</section>")
 
 
 # ---------- ANNOUNCEMENTS ----------
@@ -2632,7 +2799,7 @@ def manage_cidb():
             flash("Invalid document review status.")
           else:
             db.execute("UPDATE cidb_uploads SET review_status=%s, review_note=%s, reviewed_at=NOW() WHERE id=%s", (review_status, review_note or None, record_id))
-            log_action("review_cidb_document", f"Document {record_id}: {review_status}")
+            log_action("review_document", f"Document {record_id}: {review_status}")
         elif action == "edit" and record_id:
           title = request.form.get("title", "").strip()
           file = request.files.get("file")
@@ -2657,7 +2824,7 @@ def manage_cidb():
   try:
     with conn.cursor() as db:
       db.execute("""
-                SELECT c.id, u.username, c.title, c.filename, c.uploaded_at, c.review_status, c.review_note 
+                SELECT c.id, u.username, u.role, c.title, c.filename, c.uploaded_at, c.review_status, c.review_note 
                 FROM cidb_uploads c JOIN users u ON c.user_id = u.id 
                 ORDER BY c.id DESC
             """)
@@ -2665,61 +2832,68 @@ def manage_cidb():
   finally:
     conn.close()
 
-  table_html = (
-      "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Protégé"
-      " Username</th><th>Title</th><th>File</th><th>Uploaded"
-      " Date</th><th>Review</th><th>Action</th></tr></thead><tbody>"
-  )
-  for r in rows:
-    file_link = f'<a href="/uploads/{r["filename"]}" target="_blank">View File</a>'
-    escaped_title = r["title"].replace("'", "\\'")
-
-    menu_id = f"managecidb_menu_{r['id']}"
-    menu_items = f"""
-        <button type="button" onclick="openEditCidbModal('{r['id']}', '{escaped_title}')">
-            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
-        </button>
-        <form method="post" onsubmit="return confirm('Delete this record?');" style="margin:0;">
-            <input type="hidden" name="action" value="delete">
-            <input type="hidden" name="record_id" value="{r['id']}">
-            <button type="submit" class="text-danger">
-                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+  def build_cidb_table(filtered_rows):
+    t_html = "<div class='table-wrap'><table><thead><tr><th>ID</th><th>Username</th><th>Title</th><th>File</th><th>Uploaded Date</th><th>Review</th><th>Action</th></tr></thead><tbody>"
+    if filtered_rows:
+      for r in filtered_rows:
+        file_link = f'<a href="/uploads/{r["filename"]}" target="_blank">View File</a>'
+        escaped_title = r["title"].replace("'", "\\'")
+        menu_id = f"managecidb_menu_{r['id']}"
+        menu_items = f"""
+            <button type="button" onclick="openEditCidbModal('{r['id']}', '{escaped_title}')">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
             </button>
-        </form>
-    """
-    actions_td = action_menu_html(menu_id, menu_items)
-
-    table_html += f"""
-        <tr>
-            <td>{r['id']}</td>
-            <td><strong>{r['username']}</strong></td>
-            <td>{r['title']}</td>
-            <td>{file_link}</td>
-            <td>{r['uploaded_at']}</td>
-            <td>
-                <form method="post">
-                    <input type="hidden" name="action" value="review">
-                    <input type="hidden" name="record_id" value="{r['id']}">
-                    <select name="review_status">
-                        <option {'selected' if r.get('review_status') == 'Pending' else ''}>Pending</option>
-                        <option {'selected' if r.get('review_status') == 'Approved' else ''}>Approved</option>
-                        <option {'selected' if r.get('review_status') == 'Needs Changes' else ''}>Needs Changes</option>
-                    </select>
-                    <textarea name="review_note" rows="2" placeholder="Review note">{escape(r.get('review_note') or '')}</textarea>
-                    <button class="btn-sm" type="submit">Save Review</button>
-                </form>
-            </td>
-            <td>{actions_td}</td>
-        </tr>
+            <form method="post" onsubmit="return confirm('Delete this record?');" style="margin:0;">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="record_id" value="{r['id']}">
+                <button type="submit" class="text-danger">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+                </button>
+            </form>
         """
-  table_html += "</tbody></table></div>"
+        actions_td = action_menu_html(menu_id, menu_items)
+        t_html += f"""
+            <tr>
+                <td>{r['id']}</td>
+                <td><strong>{r['username']}</strong></td>
+                <td>{r['title']}</td>
+                <td>{file_link}</td>
+                <td>{r['uploaded_at']}</td>
+                <td>
+                    <form method="post">
+                        <input type="hidden" name="action" value="review">
+                        <input type="hidden" name="record_id" value="{r['id']}">
+                        <select name="review_status">
+                            <option {'selected' if r.get('review_status') == 'Pending' else ''}>Pending</option>
+                            <option {'selected' if r.get('review_status') == 'Approved' else ''}>Approved</option>
+                            <option {'selected' if r.get('review_status') == 'Needs Changes' else ''}>Needs Changes</option>
+                        </select>
+                        <textarea name="review_note" rows="2" placeholder="Review note">{escape(r.get('review_note') or '')}</textarea>
+                        <button class="btn-sm" type="submit">Save Review</button>
+                    </form>
+                </td>
+                <td>{actions_td}</td>
+            </tr>
+            """
+    else:
+      t_html += "<tr><td colspan='7' class='muted'>No records found.</td></tr>"
+    t_html += "</tbody></table></div>"
+    return t_html
+
+  protege_docs = [r for r in rows if r.get('role') == 'protege']
+  staff_docs = [r for r in rows if r.get('role') == 'staff']
 
   content = f"""
-    <h2>All Protégé CIDB Records & Documents</h2>
-    <section class="panel"><h3>Monitor All Uploads</h3>
-    {table_html}
+    <h2>All User CIDB & Compliance Records</h2>
+    <section class="panel">
+      <h3>Protégé Documents</h3>
+      {build_cidb_table(protege_docs)}
     </section>
-    """
+    <section class="panel">
+      <h3>Staff Documents</h3>
+      {build_cidb_table(staff_docs)}
+    </section>
+  """
   return page(content)
 
 # ---------- 7. ADMIN: MANAGE USERS (LIST, ADD, DELETE) ----------
@@ -2743,7 +2917,7 @@ def manage_users():
           full_name = request.form.get("new_full_name", "").strip()
           new_role = request.form.get("new_role", "protege").strip().lower()
 
-          if new_role not in ("admin", "protege"):
+          if new_role not in ("admin", "protege", "staff"):
             flash("Invalid role selected.")
           elif not new_username or not new_password:
             flash("Username and temporary password are required.")
@@ -2763,12 +2937,12 @@ def manage_users():
                 )
                 new_user_id = db.lastrowid
                 if full_name:
-                  position = "Administrator" if new_role == "admin" else "Protégé"
+                  position = "Administrator" if new_role == "admin" else ("Protégé" if new_role == "protege" else "Staff")
                   db.execute("INSERT INTO employees (user_id, full_name, position) VALUES (%s, %s, %s)", (new_user_id, full_name, position))
                 conn.commit()
                 log_action("create_user_account", f"Created {new_role} account: {new_username}")
-                role_label = "administrator" if new_role == "admin" else "Protégé"
-                flash(f"{role_label} account created. Share the temporary password securely; the user must change it on first login.")
+                role_label = "administrator" if new_role == "admin" else ("Protégé" if new_role == "protege" else "Staff")
+                flash(f"{role_label.capitalize()} account created. Share the temporary password securely; the user must change it on first login.")
 
         elif action == "delete":
           user_id = request.form.get("user_id")
@@ -2822,7 +2996,6 @@ def manage_users():
         </tr>
     """
 
-  # Add new person form row at the top
   add_row_html = f"""
         <tr style="background: #f8faf9;">
             <td>#</td>
@@ -2832,10 +3005,16 @@ def manage_users():
                     <input type="text" name="new_username" placeholder="New Username" required maxlength="100" style="padding:8px; margin:0; width:100%; box-sizing:border-box;">
                     <select name="new_role" required style="padding:8px; margin:0; width:100%; box-sizing:border-box;">
                         <option value="protege">Protégé</option>
+                        <option value="staff">Staff</option>
                         <option value="admin">Admin</option>
                     </select>
                     <input type="text" name="new_full_name" placeholder="Full name (optional)" style="padding:8px; margin:0; width:100%; box-sizing:border-box;">
-                    <input type="password" name="new_password" placeholder="Temporary password (min 8, letter, number, symbol)" required style="padding:8px; margin:0; width:100%; box-sizing:border-box;">
+                    <div class="password-container" style="margin:0; width:100%;">
+                        <input type="password" id="new_user_pass" name="new_password" placeholder="Temporary password (min 8, letter, number, symbol)" required style="padding:8px; padding-right:42px; margin:0; width:100%; box-sizing:border-box;">
+                        <button type="button" class="toggle-eye-btn" onclick="togglePasswordVisibility('new_user_pass', this)">
+                            <svg viewBox="0 0 24 24"><use href="#icon-eye-open"></use></svg>
+                        </button>
+                    </div>
                     <button type="submit" class="btn btn-sm" style="margin:0; background:#23594b; white-space:nowrap;">Create Account</button>
                 </form>
             </td>
@@ -2863,7 +3042,7 @@ def manage_users():
 
   content = f"""
     <h2>User Accounts & Password Management</h2>
-    <p class="muted">Only administrators can create accounts. Choose Admin or Protégé; every new account must change its temporary password at first login. Administrators can reset other users’ passwords from Update.</p>
+    <p class="muted">Only administrators can create accounts. Choose Admin, Protégé, or Staff; every new account must change its temporary password at first login. Administrators can reset other users’ passwords from Update.</p>
     <section class="panel">
         <h3>Registered Users List</h3>
         {user_table_html}
@@ -2981,7 +3160,7 @@ def employees():
               try: (app.config["UPLOAD_FOLDER"] / old["filename"]).unlink(missing_ok=True)
               except OSError: app.logger.warning("Could not remove employee attachment")
             log_action("delete_employee", str(employee_id))
-            flash("Employee profile deleted.")
+            flash("Staff profile deleted.")
           return redirect(url_for("employees"))
         employee_id = request.form.get("employee_id", type=int) if action == "edit" else None
         full_name = request.form.get("full_name", "").strip()
@@ -3012,58 +3191,75 @@ def employees():
             log_action("edit_employee", full_name); flash("Profile updated successfully.")
           else:
             db.execute("INSERT INTO employees (full_name, staff_id, department, position, cidb_number, cidb_expiry, employment_status, filename) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", (full_name, staff_id, department, position, cidb_number, cidb_expiry, status, new_file))
-            conn.commit(); log_action("create_employee", full_name); flash("Employee profile created.")
+            conn.commit(); log_action("create_employee", full_name); flash("Staff profile created.")
           return redirect(url_for("employees"))
       edit_id = request.args.get("edit", type=int)
       if edit_id:
         db.execute("SELECT * FROM employees WHERE id=%s", (edit_id,)); editing = db.fetchone()
-      db.execute("SELECT * FROM employees ORDER BY full_name"); rows = db.fetchall()
+      db.execute("SELECT e.*, u.role FROM employees e LEFT JOIN users u ON e.user_id = u.id ORDER BY e.full_name"); rows = db.fetchall()
   finally:
     conn.close()
   e = editing or {}
   field = lambda name: escape(str(e.get(name) or ""))
   selected = lambda val: "selected" if e.get("employment_status", "Active") == val else ""
   
-  tr_list = []
-  for r in rows:
-    menu_id = f"emp_menu_{r['id']}"
-    menu_items = f"""
-        <a href='/employees?edit={r['id']}'>
-            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
-        </a>
-        <form method='post' onsubmit="return confirm('Delete this profile?')" style="margin:0;">
-            <input type='hidden' name='action' value='delete'>
-            <input type='hidden' name='employee_id' value='{r['id']}'>
-            <button type="submit" class="text-danger">
-                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
-            </button>
-        </form>
-    """
-    actions_td = action_menu_html(menu_id, menu_items)
-    file_view = f"<a target='_blank' href='/uploads/{quote(str(r['filename']), safe='')}'>View file</a><br>" if r.get('filename') else ''
-    
-    tr_list.append(f"<tr><td>{escape(str(r['full_name'] or ''))}</td><td>{escape(str(r['staff_id'] or '-'))}</td><td>{escape(str(r['department'] or '-'))}</td><td>{escape(str(r['position'] or '-'))}</td><td>{escape(str(r['cidb_number'] or '-'))}</td><td>{escape(str(r['cidb_expiry'] or '-'))}</td><td>{escape(str(r['employment_status'] or ''))}</td><td>{file_view}{actions_td}</td></tr>")
-  
-  tr = "".join(tr_list) or "<tr><td colspan='8'>No profiles yet.</td></tr>"
+  def build_employee_table(filtered_rows):
+    t_html = "<div class='table-wrap'><table><thead><tr><th>Name</th><th>Staff ID</th><th>Department</th><th>Position</th><th>CIDB No.</th><th>CIDB expiry</th><th>Status</th><th>Action</th></tr></thead><tbody>"
+    if filtered_rows:
+      for r in filtered_rows:
+        menu_id = f"emp_menu_{r['id']}"
+        menu_items = f"""
+            <a href='/employees?edit={r['id']}'>
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Edit
+            </a>
+            <form method='post' onsubmit="return confirm('Delete this profile?')" style="margin:0;">
+                <input type='hidden' name='action' value='delete'>
+                <input type='hidden' name='employee_id' value='{r['id']}'>
+                <button type="submit" class="text-danger">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+                </button>
+            </form>
+        """
+        actions_td = action_menu_html(menu_id, menu_items)
+        file_view = f"<a target='_blank' href='/uploads/{quote(str(r['filename']), safe='')}'>View file</a><br>" if r.get('filename') else ''
+        t_html += f"<tr><td>{escape(str(r['full_name'] or ''))}</td><td>{escape(str(r['staff_id'] or '-'))}</td><td>{escape(str(r['department'] or '-'))}</td><td>{escape(str(r['position'] or '-'))}</td><td>{escape(str(r['cidb_number'] or '-'))}</td><td>{escape(str(r['cidb_expiry'] or '-'))}</td><td>{escape(str(r['employment_status'] or ''))}</td><td>{file_view}{actions_td}</td></tr>"
+    else:
+      t_html += "<tr><td colspan='8' class='muted'>No profiles found.</td></tr>"
+    t_html += "</tbody></table></div>"
+    return t_html
 
-  content = f"""<h2>Employee & Protégé Profiles</h2><section class='panel'><h3>{'Edit profile' if editing else 'Add profile'}</h3><form method='post' enctype='multipart/form-data'>
-  <input type='hidden' name='action' value="{'edit' if editing else 'add'}"><input type='hidden' name='employee_id' value='{e.get('id','') if editing else ''}'>
-  <label>Full name</label><input name='full_name' required maxlength='150' value='{field('full_name')}'>
-  <label>Staff ID</label><input name='staff_id' maxlength='80' value='{field('staff_id')}'>
-  <label>Department</label><input name='department' maxlength='100' value='{field('department')}'>
-  <label>Position</label><input name='position' maxlength='100' value='{field('position')}'>
-  <label>CIDB number</label><input name='cidb_number' maxlength='100' value='{field('cidb_number')}'>
-  <label>CIDB expiry date</label><input type='date' name='cidb_expiry' value='{field('cidb_expiry')}'>
-  <label>Status</label><select name='employment_status'><option {selected('Active')}>Active</option><option {selected('Inactive')}>Inactive</option><option {selected('Completed')}>Completed</option></select>
-  <label>
-            Attach Certificate / File (Optional)<br>
-            <span style="font-size: 12px; font-weight: normal; color: #7a8c83;">
-                Supported formats: PDF, JPG, PNG
-            </span>
-        </label>
+  protege_profiles = [r for r in rows if r.get('role') == 'protege']
+  staff_profiles = [r for r in rows if r.get('role') != 'protege']
+
+  content = f"""
+    <h2>Staff & Protégé Profiles</h2>
+    <section class='panel'>
+      <h3>{'Edit profile' if editing else 'Add profile'}</h3>
+      <form method='post' enctype='multipart/form-data'>
+        <input type='hidden' name='action' value="{'edit' if editing else 'add'}">
+        <input type='hidden' name='employee_id' value='{e.get('id','') if editing else ''}'>
+        <label>Full name</label><input name='full_name' required maxlength='150' value='{field('full_name')}'>
+        <label>Staff ID</label><input name='staff_id' maxlength='80' value='{field('staff_id')}'>
+        <label>Department</label><input name='department' maxlength='100' value='{field('department')}'>
+        <label>Position</label><input name='position' maxlength='100' value='{field('position')}'>
+        <label>CIDB number</label><input name='cidb_number' maxlength='100' value='{field('cidb_number')}'>
+        <label>CIDB expiry date</label><input type='date' name='cidb_expiry' value='{field('cidb_expiry')}'>
+        <label>Status</label><select name='employment_status'><option {selected('Active')}>Active</option><option {selected('Inactive')}>Inactive</option><option {selected('Completed')}>Completed</option></select>
+        <label>Attach Certificate / File (Optional)<br><span style="font-size: 12px; font-weight: normal; color: #7a8c83;">Supported formats: PDF, JPG, PNG</span></label>
         <input type="file" name="attachment" accept=".png, .jpg, .jpeg, .pdf">
-  {'<p class="muted">An existing attachment will be kept if no new file is selected.</p>' if editing and e.get('filename') else ''}
-  <button>{'Save Changes' if editing else 'Add Profile'}</button> {'<a class="btn" href="/employees">Cancel</a>' if editing else ''}</form></section><section class='panel'><h3>Profiles</h3><div class='table-wrap'><table><thead><tr><th>Name</th><th>Staff ID</th><th>Department</th><th>Position</th><th>CIDB No.</th><th>CIDB expiry</th><th>Status</th><th>Action</th></tr></thead><tbody>{tr}</tbody></table></div></section>"""
+        {'<p class="muted">An existing attachment will be kept if no new file is selected.</p>' if editing and e.get('filename') else ''}
+        <button>{'Save Changes' if editing else 'Add Profile'}</button> {'<a class="btn" href="/employees">Cancel</a>' if editing else ''}
+      </form>
+    </section>
+    <section class='panel'>
+      <h3>Protégé Profiles</h3>
+      {build_employee_table(protege_profiles)}
+    </section>
+    <section class='panel'>
+      <h3>Staff Profiles</h3>
+      {build_employee_table(staff_profiles)}
+    </section>
+  """
   return page(content)
 
 
@@ -3248,7 +3444,6 @@ def reports():
     flash("Access denied. Admin only.")
     return redirect(url_for("dashboard"))
     
-  # Get filter selections from query parameters
   filter_type = request.args.get("filter", "all")
   start_date = request.args.get("start_date", "")
   end_date = request.args.get("end_date", "")
@@ -3379,14 +3574,11 @@ def reports():
 
 @app.route("/uploads/<filename>")
 def uploaded_file(filename):
-  # Never accept path components from the URL, even though send_from_directory
-  # also applies safe path handling.
   filename = Path(str(filename or "")).name
   if not filename or filename in {".", ".."}:
     return "Invalid file name", 400
   if "user_id" not in session:
     return redirect(url_for("login"))
-  # Admin can view stored files. Protégés can only access files attached to their own CIDB records.
   if session.get("role") == "admin":
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename, as_attachment=False)
   conn = get_db()
@@ -3416,7 +3608,6 @@ def uploaded_file(filename):
 
 # ============================================================================
 # QSHET RELIABILITY ENHANCEMENTS
-# Additive hardening: existing modules and routes are retained.
 # ============================================================================
 
 import hmac
@@ -3424,8 +3615,6 @@ import threading
 import time
 from collections import defaultdict, deque
 
-# A production deployment must provide a stable secret. Local development may
-# continue using the random per-process key configured above.
 _CONFIGURED_SECRET = os.environ.get("FLASK_SECRET_KEY")
 if os.environ.get("APP_ENV", "").lower() == "production" and not _CONFIGURED_SECRET:
     raise RuntimeError("Set FLASK_SECRET_KEY before running QSHET in production.")
@@ -3439,8 +3628,6 @@ app.config.update(
     MAX_CONTENT_LENGTH=10 * 1024 * 1024,
 )
 
-# Preserve Werkzeug's sanitizer, then add a random suffix so older upload paths
-# that build filenames manually are less likely to overwrite another file.
 _werkzeug_secure_filename = secure_filename
 
 def secure_filename(filename):
@@ -3452,7 +3639,6 @@ def secure_filename(filename):
 
 
 def valid_upload_file(file_storage):
-    """Check extension and basic file signature for PDF, PNG, and JPEG uploads."""
     if not file_storage or not getattr(file_storage, "filename", ""):
         return False
     original = _werkzeug_secure_filename(file_storage.filename)
@@ -3478,7 +3664,6 @@ def valid_upload_file(file_storage):
 
 
 def save_upload(file, prefix="file"):
-    """Save validated uploads with unpredictable names and the configured size cap."""
     if not file or not file.filename:
         return None
     if not valid_upload_file(file):
@@ -3490,8 +3675,6 @@ def save_upload(file, prefix="file"):
     file.save(destination)
     return filename
 
-# CSRF protection is applied to existing HTML forms automatically so the current
-# form markup and module workflows do not need to be rewritten one by one.
 _CSRF_FORM_TOKEN = "_csrf_token"
 _POST_FORM_RE = re.compile(r"<form\b[^>]*>", re.IGNORECASE)
 _LOGIN_ATTEMPTS = defaultdict(deque)
@@ -3506,8 +3689,6 @@ def qshet_security_guard():
         token = secrets.token_urlsafe(32)
         session[_CSRF_FORM_TOKEN] = token
 
-    # Basic per-process login throttling. For multiple workers/servers, replace
-    # this with a shared store such as Redis or a reverse-proxy rate limiter.
     if request.endpoint == "login" and request.method == "POST":
         now = time.time()
         client = request.remote_addr or "unknown"
@@ -3532,8 +3713,6 @@ def qshet_security_headers(response):
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     if response.mimetype == "text/html":
         response.headers.setdefault("Cache-Control", "no-store")
-        # Inject the CSRF field into every existing POST form while preserving
-        # current pages, modal forms, and form actions.
         token = str(session.get(_CSRF_FORM_TOKEN, ""))
         if token and response.get_data():
             html = response.get_data(as_text=True)
@@ -3549,7 +3728,6 @@ def qshet_security_headers(response):
 
 
 def _parse_qshet_date(value):
-    """Accept date objects and common legacy date strings without crashing alerts."""
     if not value:
         return None
     if isinstance(value, datetime):
@@ -3671,7 +3849,7 @@ def qshet_alerts():
 
             db.execute("SELECT id,full_name,cidb_number,cidb_expiry,employment_status FROM employees WHERE cidb_expiry IS NOT NULL AND employment_status='Active'")
             for row in db.fetchall():
-                rendered = _alert_row("Employee CIDB", f"{row.get('full_name')} ({row.get('cidb_number') or 'No CIDB number'})", row.get("cidb_expiry"), "Active employee")
+                rendered = _alert_row("Staff/Employee CIDB", f"{row.get('full_name')} ({row.get('cidb_number') or 'No CIDB number'})", row.get("cidb_expiry"), "Active profile")
                 if rendered: alert_rows.append(rendered)
     except Exception:
         app.logger.exception("Could not load QSHET alerts")
@@ -3700,7 +3878,6 @@ def qshet_file_too_large(_error):
 
 @app.errorhandler(500)
 def qshet_internal_error(error):
-  # Do not expose database details, filesystem paths, or stack traces to users.
   app.logger.error("Unhandled QSHET application error: %s", error, exc_info=True)
   return ("An unexpected system error occurred. Please contact the QSHET administrator.", 500)
 
