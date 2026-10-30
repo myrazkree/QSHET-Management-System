@@ -2996,90 +2996,115 @@ def manage_users():
   finally:
     conn.close()
 
-  table_rows_html = ""
-  for u in users:
-    is_current = (u['id'] == session.get('user_id'))
-    menu_id = f"user_menu_{u['id']}"
-    menu_items = f"""
-        <a href="/edit-user/{u['id']}">
-            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Update
-        </a>
-    """
-    if not is_current:
-      menu_items += f"""
-        <form method="post" onsubmit="return confirm('Delete this user and their records?');" style="margin:0;">
-            <input type="hidden" name="action" value="delete">
-            <input type="hidden" name="user_id" value="{u['id']}">
-            <button type="submit" class="text-danger">
-                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
-            </button>
-        </form>
+  def build_user_table(filtered_users, show_add_form=False):
+    table_rows_html = ""
+    for u in filtered_users:
+      is_current = (u['id'] == session.get('user_id'))
+      menu_id = f"user_menu_{u['id']}"
+      menu_items = f"""
+          <a href="/edit-user/{u['id']}">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-edit-pencil"></use></svg> Update
+          </a>
       """
-    actions_td = action_menu_html(menu_id, menu_items) if not is_current else '<span class="muted" style="font-size:12px;">Active</span>'
+      if not is_current:
+        menu_items += f"""
+          <form method="post" onsubmit="return confirm('Delete this user and their records?');" style="margin:0;">
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="user_id" value="{u['id']}">
+              <button type="submit" class="text-danger">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><use href="#icon-trash"></use></svg> Delete
+              </button>
+          </form>
+        """
+      actions_td = action_menu_html(menu_id, menu_items) if not is_current else '<span class="muted" style="font-size:12px;">Active</span>'
 
-    table_rows_html += f"""
-        <tr>
-            <td>{u['id']}</td>
-            <td><strong>{u['username']}</strong></td>
-            <td><span class="badge">{u['role'].capitalize()}</span></td>
-            <td>{actions_td}</td>
-        </tr>
+      table_rows_html += f"""
+          <tr>
+              <td>{u['id']}</td>
+              <td><strong>{u['username']}</strong></td>
+              <td><span class="badge">{u['role'].capitalize()}</span></td>
+              <td>{actions_td}</td>
+          </tr>
+      """
+
+    add_row_html = ""
+    if show_add_form:
+      add_row_html = f"""
+            <tr style="background: #f8faf9;">
+                <td>#</td>
+                <td colspan="3">
+                    <form method="post" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px; align-items:center;">
+                        <input type="hidden" name="action" value="add">
+                        <input type="text" name="new_username" placeholder="New Username" required maxlength="100" style="padding:8px; margin:0; width:100%; box-sizing:border-box;">
+                        <select name="new_role" required style="padding:8px; margin:0; width:100%; box-sizing:border-box;">
+                            <option value="protege">Protégé</option>
+                            <option value="staff">Staff</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                        <input type="text" name="new_full_name" placeholder="Full name (optional)" style="padding:8px; margin:0; width:100%; box-sizing:border-box;">
+                        <div class="password-container" style="margin:0; width:100%;">
+                            <input type="password" id="new_user_pass" name="new_password" placeholder="Temporary password (min 8, letter, number, symbol)" required style="padding:8px; padding-right:42px; margin:0; width:100%; box-sizing:border-box;">
+                            <button type="button" class="toggle-eye-btn" onclick="togglePasswordVisibility('new_user_pass', this)">
+                                <svg viewBox="0 0 24 24"><use href="#icon-eye-open"></use></svg>
+                            </button>
+                        </div>
+                        <button type="submit" class="btn btn-sm" style="margin:0; background:#23594b; white-space:nowrap;">Create Account</button>
+                    </form>
+                </td>
+            </tr>
+      """
+
+    if not filtered_users and not show_add_form:
+      table_rows_html = "<tr><td colspan='4' class='muted'>No users found in this category.</td></tr>"
+
+    return f"""
+      <div class="table-wrap">
+          <table>
+              <thead>
+                  <tr>
+                      <th>ID</th>
+                      <th>Username</th>
+                      <th>Role</th>
+                      <th>Action</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  {add_row_html}
+                  {table_rows_html}
+              </tbody>
+          </table>
+      </div>
     """
 
-  add_row_html = f"""
-        <tr style="background: #f8faf9;">
-            <td>#</td>
-            <td colspan="3">
-                <form method="post" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px; align-items:center;">
-                    <input type="hidden" name="action" value="add">
-                    <input type="text" name="new_username" placeholder="New Username" required maxlength="100" style="padding:8px; margin:0; width:100%; box-sizing:border-box;">
-                    <select name="new_role" required style="padding:8px; margin:0; width:100%; box-sizing:border-box;">
-                        <option value="protege">Protégé</option>
-                        <option value="staff">Staff</option>
-                        <option value="admin">Admin</option>
-                    </select>
-                    <input type="text" name="new_full_name" placeholder="Full name (optional)" style="padding:8px; margin:0; width:100%; box-sizing:border-box;">
-                    <div class="password-container" style="margin:0; width:100%;">
-                        <input type="password" id="new_user_pass" name="new_password" placeholder="Temporary password (min 8, letter, number, symbol)" required style="padding:8px; padding-right:42px; margin:0; width:100%; box-sizing:border-box;">
-                        <button type="button" class="toggle-eye-btn" onclick="togglePasswordVisibility('new_user_pass', this)">
-                            <svg viewBox="0 0 24 24"><use href="#icon-eye-open"></use></svg>
-                        </button>
-                    </div>
-                    <button type="submit" class="btn btn-sm" style="margin:0; background:#23594b; white-space:nowrap;">Create Account</button>
-                </form>
-            </td>
-        </tr>
-  """
-
-  user_table_html = f"""
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Username</th>
-                    <th>Role</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {add_row_html}
-                {table_rows_html}
-            </tbody>
-        </table>
-    </div>
-  """
+  admin_users = [u for u in users if u.get('role') == 'admin']
+  protege_users = [u for u in users if u.get('role') == 'protege']
+  staff_users = [u for u in users if u.get('role') == 'staff']
 
   content = f"""
     <h2>User Accounts & Password Management</h2>
-    <p class="muted">Only administrators can create accounts. Choose Admin, Protégé, or Staff; every new account must change its temporary password at first login. Administrators can reset other users’ passwords from Update.</p>
+    <p class="muted">Only administrators can create accounts. Choose Admin, Protégé, or Staff; every new account must change its temporary password at first login.</p>
+    
     <section class="panel">
-        <h3>Registered Users List</h3>
-        {user_table_html}
+        <h3>Create New User Account</h3>
+        {build_user_table([], show_add_form=True)}
+    </section>
+
+    <section class="panel">
+        <h3>Administrator Accounts</h3>
+        {build_user_table(admin_users)}
+    </section>
+
+    <section class="panel">
+        <h3>Protégé Accounts</h3>
+        {build_user_table(protege_users)}
+    </section>
+
+    <section class="panel">
+        <h3>Staff Accounts</h3>
+        {build_user_table(staff_users)}
     </section>
   """
   return page(content)
-
 
 # ---------- 8. ADMIN: EDIT SPECIFIC USER (UPDATE ROLE / PASSWORD) ----------
 
