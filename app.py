@@ -332,7 +332,7 @@ def save_upload(file, prefix="file"):
   """Validate extension and assign a unique, non-user-controlled storage name."""
   if not file or not file.filename:
     return None
-  if not allowed_file(file.filename):
+  if not valid_upload_file(file):
     raise ValueError("Only PDF, JPG, JPEG and PNG files are allowed.")
   original = secure_filename(file.filename)
   suffix = Path(original).suffix.lower()
@@ -575,6 +575,7 @@ footer strong { color: #e8c580; }
         <a href="/actions">Corrective Actions</a>
         <a href="/inspections">Site Inspections</a>
         <a href="/reports">Reports & Audit Log</a>
+        <a href="/alerts">QSHET Alerts</a>
         <a href="/tasks">Protégé Tasks</a>
         <a href="/work-log">Protégé Work Logs</a>
         <a href="/submit-safety">Protégé Safety Inbox</a>
@@ -950,17 +951,44 @@ function checkPasswordStrength(password) {
 
 function showReportDetails(id, title, category, description, filename, status, created_at) {
     const modalBody = document.getElementById('modalBody');
-    let fileHtml = filename ? `<a href="/uploads/${filename}" target="_blank">View Attached File (${filename})</a>` : 'None';
-    
-    modalBody.innerHTML = `
-        <div class="modal-field"><label>Report ID</label><div>#${id}</div></div>
-        <div class="modal-field"><label>Title</label><div>${title}</div></div>
-        <div class="modal-field"><label>Category</label><div>${category}</div></div>
-        <div class="modal-field"><label>Description</label><div>${description || 'No description provided'}</div></div>
-        <div class="modal-field"><label>Attached File</label><div>${fileHtml}</div></div>
-        <div class="modal-field"><label>Status</label><div><strong>${status}</strong></div></div>
-        <div class="modal-field"><label>Created Date</label><div>${created_at}</div></div>
-    `;
+    modalBody.replaceChildren();
+
+    function addField(labelText, value) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'modal-field';
+        const label = document.createElement('label');
+        label.textContent = labelText;
+        const valueBox = document.createElement('div');
+        valueBox.textContent = value == null || value === '' ? '—' : String(value);
+        wrapper.append(label, valueBox);
+        modalBody.appendChild(wrapper);
+    }
+
+    addField('Report ID', id);
+    addField('Title', title);
+    addField('Category', category);
+    addField('Description', description || 'No description provided');
+
+    const fileWrapper = document.createElement('div');
+    fileWrapper.className = 'modal-field';
+    const fileLabel = document.createElement('label');
+    fileLabel.textContent = 'Attached File';
+    const fileBox = document.createElement('div');
+    if (filename) {
+        const link = document.createElement('a');
+        link.href = '/uploads/' + encodeURIComponent(String(filename));
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = 'View attached file';
+        fileBox.appendChild(link);
+    } else {
+        fileBox.textContent = 'None';
+    }
+    fileWrapper.append(fileLabel, fileBox);
+    modalBody.appendChild(fileWrapper);
+
+    addField('Status', status);
+    addField('Created Date', created_at);
     document.getElementById('detailModal').style.display = 'flex';
 }
 
@@ -1412,7 +1440,7 @@ def safety():
           file = request.files.get("file")
 
           if title and category in ["Incident", "Inspection", "Hazard"]:
-            if file and file.filename and allowed_file(file.filename):
+            if file and file.filename and valid_upload_file(file):
               filename = secure_filename(
                   f"safety_{date.today().isoformat()}_{file.filename}"
               )
@@ -1443,7 +1471,7 @@ def safety():
 
           if title and category in ["Incident", "Inspection", "Hazard"]:
             filename = None
-            if file and file.filename and allowed_file(file.filename):
+            if file and file.filename and valid_upload_file(file):
               filename = secure_filename(
                   f"safety_{date.today().isoformat()}_{file.filename}"
               )
@@ -1595,7 +1623,7 @@ def documents():
           review_date = request.form.get("review_date", "")
 
           if title and doc_type:
-            if file and file.filename and allowed_file(file.filename):
+            if file and file.filename and valid_upload_file(file):
               filename = secure_filename(
                   f"doc_{date.today().isoformat()}_{file.filename}"
               )
@@ -1623,7 +1651,7 @@ def documents():
           review_date = request.form.get("review_date", "")
           if title and doc_type:
             filename = None
-            if file and file.filename and allowed_file(file.filename):
+            if file and file.filename and valid_upload_file(file):
               filename = secure_filename(
                   f"doc_{date.today().isoformat()}_{file.filename}"
               )
@@ -1758,7 +1786,7 @@ def training():
           expiry_date = request.form.get("expiry_date", "")
 
           if employee and course:
-            if file and file.filename and allowed_file(file.filename):
+            if file and file.filename and valid_upload_file(file):
               filename = secure_filename(
                   f"train_{date.today().isoformat()}_{file.filename}"
               )
@@ -1786,7 +1814,7 @@ def training():
           expiry_date = request.form.get("expiry_date", "")
           if employee and course:
             filename = None
-            if file and file.filename and allowed_file(file.filename):
+            if file and file.filename and valid_upload_file(file):
               filename = secure_filename(
                   f"train_{date.today().isoformat()}_{file.filename}"
               )
@@ -1928,7 +1956,7 @@ def my_cidb():
         elif action == "edit" and record_id:
           title = request.form.get("title", "").strip()
           if title:
-            if file and file.filename and allowed_file(file.filename):
+            if file and file.filename and valid_upload_file(file):
               filename = secure_filename(
                   f"cidb_{session['username']}_{date.today().isoformat()}_{file.filename}"
               )
@@ -1956,7 +1984,7 @@ def my_cidb():
                 )
         else:
           title = request.form.get("title", "").strip()
-          if title and file and file.filename and allowed_file(file.filename):
+          if title and file and file.filename and valid_upload_file(file):
             filename = secure_filename(
                 f"cidb_{session['username']}_{date.today().isoformat()}_{file.filename}"
             )
@@ -2589,7 +2617,7 @@ def manage_cidb():
           title = request.form.get("title", "").strip()
           file = request.files.get("file")
           if title:
-            if file and file.filename and allowed_file(file.filename):
+            if file and file.filename and valid_upload_file(file):
               filename = secure_filename(
                   f"cidb_admin_{date.today().isoformat()}_{file.filename}"
               )
@@ -3345,6 +3373,284 @@ def uploaded_file(filename):
     return "Access denied", 403
   return send_from_directory(app.config["UPLOAD_FOLDER"], filename, as_attachment=False)
 
+
+
+# ============================================================================
+# QSHET RELIABILITY ENHANCEMENTS
+# Additive hardening: existing modules and routes are retained.
+# ============================================================================
+
+import hmac
+import threading
+import time
+from collections import defaultdict, deque
+
+# A production deployment must provide a stable secret. Local development may
+# continue using the random per-process key configured above.
+_CONFIGURED_SECRET = os.environ.get("FLASK_SECRET_KEY")
+if os.environ.get("APP_ENV", "").lower() == "production" and not _CONFIGURED_SECRET:
+    raise RuntimeError("Set FLASK_SECRET_KEY before running QSHET in production.")
+if _CONFIGURED_SECRET:
+    app.secret_key = _CONFIGURED_SECRET
+
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE", "0") == "1",
+    MAX_CONTENT_LENGTH=10 * 1024 * 1024,
+)
+
+# Preserve Werkzeug's sanitizer, then add a random suffix so older upload paths
+# that build filenames manually are less likely to overwrite another file.
+_werkzeug_secure_filename = secure_filename
+
+def secure_filename(filename):
+    cleaned = _werkzeug_secure_filename(str(filename or ""))
+    if not cleaned:
+        return f"upload_{uuid.uuid4().hex}"
+    path = Path(cleaned)
+    return f"{path.stem[:150]}_{uuid.uuid4().hex[:12]}{path.suffix.lower()}"
+
+
+def valid_upload_file(file_storage):
+    """Check extension and basic file signature for PDF, PNG, and JPEG uploads."""
+    if not file_storage or not getattr(file_storage, "filename", ""):
+        return False
+    original = _werkzeug_secure_filename(file_storage.filename)
+    extension = Path(original).suffix.lower()
+    if extension not in {".pdf", ".png", ".jpg", ".jpeg"}:
+        return False
+    stream = getattr(file_storage, "stream", None)
+    if stream is None:
+        return False
+    try:
+        position = stream.tell()
+        header = stream.read(16)
+        stream.seek(position)
+    except (OSError, AttributeError, ValueError):
+        return False
+    if extension == ".pdf":
+        return header.startswith(b"%PDF-")
+    if extension == ".png":
+        return header.startswith(b"\x89PNG\r\n\x1a\n")
+    if extension in {".jpg", ".jpeg"}:
+        return header.startswith(b"\xff\xd8\xff")
+    return False
+
+
+def save_upload(file, prefix="file"):
+    """Save validated uploads with unpredictable names and the configured size cap."""
+    if not file or not file.filename:
+        return None
+    if not valid_upload_file(file):
+        raise ValueError("The file content does not match an allowed PDF, JPG, JPEG or PNG file.")
+    original = _werkzeug_secure_filename(file.filename)
+    suffix = Path(original).suffix.lower()
+    filename = f"{_werkzeug_secure_filename(prefix)[:30]}_{uuid.uuid4().hex}{suffix}"
+    destination = app.config["UPLOAD_FOLDER"] / filename
+    file.save(destination)
+    return filename
+
+# CSRF protection is applied to existing HTML forms automatically so the current
+# form markup and module workflows do not need to be rewritten one by one.
+_CSRF_FORM_TOKEN = "_csrf_token"
+_POST_FORM_RE = re.compile(r"<form\b[^>]*>", re.IGNORECASE)
+_LOGIN_ATTEMPTS = defaultdict(deque)
+_LOGIN_ATTEMPTS_LOCK = threading.Lock()
+_LOGIN_WINDOW_SECONDS = 15 * 60
+_LOGIN_MAX_ATTEMPTS = 10
+
+@app.before_request
+def qshet_security_guard():
+    token = session.get(_CSRF_FORM_TOKEN)
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session[_CSRF_FORM_TOKEN] = token
+
+    # Basic per-process login throttling. For multiple workers/servers, replace
+    # this with a shared store such as Redis or a reverse-proxy rate limiter.
+    if request.endpoint == "login" and request.method == "POST":
+        now = time.time()
+        client = request.remote_addr or "unknown"
+        with _LOGIN_ATTEMPTS_LOCK:
+            attempts = _LOGIN_ATTEMPTS[client]
+            while attempts and now - attempts[0] > _LOGIN_WINDOW_SECONDS:
+                attempts.popleft()
+            if len(attempts) >= _LOGIN_MAX_ATTEMPTS:
+                return ("Too many login attempts. Please wait 15 minutes and try again.", 429)
+            attempts.append(now)
+
+    if request.method == "POST":
+        supplied = request.form.get(_CSRF_FORM_TOKEN) or request.headers.get("X-CSRF-Token", "")
+        if not supplied or not hmac.compare_digest(str(token), str(supplied)):
+            return ("The form security token is missing or expired. Reload the page and try again.", 400)
+
+@app.after_request
+def qshet_security_headers(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if response.mimetype == "text/html":
+        response.headers.setdefault("Cache-Control", "no-store")
+        # Inject the CSRF field into every existing POST form while preserving
+        # current pages, modal forms, and form actions.
+        token = str(session.get(_CSRF_FORM_TOKEN, ""))
+        if token and response.get_data():
+            html = response.get_data(as_text=True)
+            def add_token(match):
+                tag = match.group(0)
+                if not re.search(r"\bmethod\s*=\s*(['\"]?)post\1", tag, re.IGNORECASE):
+                    return tag
+                if re.search(r"name\s*=\s*(['\"]?)_csrf_token\1", tag, re.IGNORECASE):
+                    return tag
+                return tag + f'<input type="hidden" name="{_CSRF_FORM_TOKEN}" value="{token}">'
+            response.set_data(_POST_FORM_RE.sub(add_token, html))
+    return response
+
+
+def _parse_qshet_date(value):
+    """Accept date objects and common legacy date strings without crashing alerts."""
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    raw = str(value).strip()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(raw[:10], fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _alert_row(label, title, due_date, detail, url="#"):
+    due = _parse_qshet_date(due_date)
+    if not due:
+        return None
+    today = date.today()
+    days = (due - today).days
+    if days > 30:
+        return None
+    if days < 0:
+        timing = f"Overdue by {abs(days)} day(s)"
+        color = "#c85a54"
+    elif days == 0:
+        timing = "Due today"
+        color = "#c85a54"
+    else:
+        timing = f"Due in {days} day(s)"
+        color = "#dfa85b"
+    return (
+        f"<tr><td>{escape(label)}</td><td>{escape(title)}</td>"
+        f"<td>{escape(due.strftime('%d %b %Y'))}</td>"
+        f"<td><strong style='color:{color}'>{escape(timing)}</strong></td>"
+        f"<td>{escape(detail or '—')}</td><td>{url}</td></tr>"
+    )
+
+@app.route("/alerts", methods=["GET", "POST"])
+def qshet_alerts():
+    if session.get("role") != "admin":
+        flash("Access denied. Admin only.")
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        if request.form.get("action") != "create_action":
+            flash("Unsupported alert action.")
+            return redirect(url_for("qshet_alerts"))
+        inspection_id = request.form.get("inspection_id", type=int)
+        if not inspection_id:
+            flash("Invalid inspection reference.")
+            return redirect(url_for("qshet_alerts"))
+        conn = get_db()
+        try:
+            with conn.cursor() as db:
+                db.execute("SELECT * FROM inspections WHERE id=%s", (inspection_id,))
+                inspection = db.fetchone()
+                if not inspection:
+                    flash("Inspection was not found.")
+                elif inspection.get("result") not in {"Fail", "Observation"}:
+                    flash("Only failed or observation findings can become corrective actions.")
+                else:
+                    db.execute("SELECT id FROM corrective_actions WHERE source_type='Inspection' AND source_id=%s LIMIT 1", (inspection_id,))
+                    existing = db.fetchone()
+                    if existing:
+                        flash(f"This inspection already links to corrective action #{existing['id']}.")
+                    else:
+                        severity = "High" if inspection.get("result") == "Fail" else "Medium"
+                        title = f"Inspection finding: {inspection.get('checklist_item') or 'Untitled finding'}"
+                        description = inspection.get("findings") or inspection.get("corrective_action") or "Follow up on the inspection finding."
+                        db.execute(
+                            """INSERT INTO corrective_actions
+                               (title, description, source_type, source_id, location, severity,
+                                assigned_to, due_date, status)
+                               VALUES (%s,%s,'Inspection',%s,%s,%s,%s,%s,'Open')""",
+                            (title[:180], description, inspection_id, inspection.get("site_name"), severity,
+                             inspection.get("assigned_to"), inspection.get("due_date")),
+                        )
+                        conn.commit()
+                        log_action("create_action_from_inspection", f"Inspection #{inspection_id}")
+                        flash("Corrective action created and linked to the inspection.")
+        except Exception:
+            conn.rollback()
+            app.logger.exception("Could not create corrective action from inspection")
+            flash("The corrective action could not be created. Please try again or contact the system administrator.")
+        finally:
+            conn.close()
+        return redirect(url_for("qshet_alerts"))
+
+    conn = get_db()
+    alert_rows = []
+    try:
+        with conn.cursor() as db:
+            db.execute("SELECT id,title,due_date,status,severity,assigned_to FROM corrective_actions WHERE status NOT IN ('Resolved','Closed') AND due_date IS NOT NULL")
+            for row in db.fetchall():
+                rendered = _alert_row("Corrective action", row.get("title"), row.get("due_date"), f"{row.get('severity') or 'Medium'} · {row.get('status') or 'Open'} · {row.get('assigned_to') or 'Unassigned'}", f"<a href='/actions?edit={int(row['id'])}'>Open</a>")
+                if rendered: alert_rows.append(rendered)
+
+            db.execute("SELECT id,site_name,checklist_item,inspection_date,result,findings,due_date,status FROM inspections WHERE status <> 'Closed' AND due_date IS NOT NULL")
+            for row in db.fetchall():
+                action_button = "—"
+                if row.get("result") in {"Fail", "Observation"}:
+                    action_button = (f"<form method='post' style='margin:0'><input type='hidden' name='action' value='create_action'>"
+                                     f"<input type='hidden' name='inspection_id' value='{int(row['id'])}'>"
+                                     f"<button class='btn-sm' type='submit'>Create corrective action</button></form>")
+                rendered = _alert_row("Inspection", f"{row.get('site_name')}: {row.get('checklist_item')}", row.get("due_date"), f"{row.get('result')} · {row.get('status')}", action_button)
+                if rendered: alert_rows.append(rendered)
+
+            db.execute("SELECT id,title,review_date FROM documents WHERE review_date IS NOT NULL AND review_date <> ''")
+            for row in db.fetchall():
+                rendered = _alert_row("Document review", row.get("title"), row.get("review_date"), "Review date")
+                if rendered: alert_rows.append(rendered)
+
+            db.execute("SELECT id,employee,course,expiry_date FROM training WHERE expiry_date IS NOT NULL AND expiry_date <> ''")
+            for row in db.fetchall():
+                rendered = _alert_row("Training expiry", f"{row.get('employee')}: {row.get('course')}", row.get("expiry_date"), "Certificate expiry")
+                if rendered: alert_rows.append(rendered)
+
+            db.execute("SELECT id,full_name,cidb_number,cidb_expiry,employment_status FROM employees WHERE cidb_expiry IS NOT NULL AND employment_status='Active'")
+            for row in db.fetchall():
+                rendered = _alert_row("Employee CIDB", f"{row.get('full_name')} ({row.get('cidb_number') or 'No CIDB number'})", row.get("cidb_expiry"), "Active employee")
+                if rendered: alert_rows.append(rendered)
+    except Exception:
+        app.logger.exception("Could not load QSHET alerts")
+        flash("Some alerts could not be loaded. Check the application log and database connection.")
+    finally:
+        conn.close()
+
+    alert_rows.sort(key=lambda row: row.lower().find("overdue") if "overdue" in row.lower() else 999999)
+    body = "".join(alert_rows) or "<tr><td colspan='6' class='muted'>No overdue or upcoming items found within the next 30 days.</td></tr>"
+    content = f"""
+      <h2>QSHET Alerts & Upcoming Deadlines</h2>
+      <p class='muted'>This page highlights overdue items and items due within 30 days. Confirm the source record before taking action.</p>
+      <section class='panel'><div class='table-wrap'><table>
+        <thead><tr><th>Record type</th><th>Record</th><th>Due date</th><th>Alert</th><th>Details</th><th>Action</th></tr></thead>
+        <tbody>{body}</tbody>
+      </table></div></section>
+    """
+    return page(content)
 
 if __name__ == "__main__":
   init_db()
